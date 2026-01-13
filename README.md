@@ -6,8 +6,9 @@ A minimal [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server
 
 - ✅ **Stdio Transport**: Standard MCP transport for Claude Desktop and Antigravity
 - ✅ **HTTP Health Endpoint**: Monitor server status
-- ✅ **One Tool**: `add` - adds two numbers together
+- ✅ **Two Tools**: `echoText` and `summarizeDirectory`
 - ✅ **One Resource**: `server://info` - provides server metadata
+- ✅ **Modular Architecture**: Separated tools and server logic
 - ✅ **Deployment Ready**: Can be deployed to cloud platforms
 - ✅ **TypeScript**: Full type safety with the official MCP SDK
 
@@ -176,14 +177,20 @@ Provides information about the MCP server including version, capabilities, and a
 ## Project Structure
 
 ```
-mcp/
+letsmcp/
 ├── src/
-│   └── index.ts          # Main server implementation
-├── .env.example          # Environment configuration template
+│   ├── index.ts          # Main entry point (HTTP + stdio transport)
+│   ├── server.ts         # MCP server initialization
+│   └── tools.ts          # Tool definitions (echoText, summarizeDirectory)
+├── dist/                 # Compiled JavaScript (generated)
+├── node_modules/         # Dependencies (generated)
+├── .env.example          # Environment template
 ├── .gitignore           # Git ignore rules
-├── package.json         # Dependencies and scripts
+├── package.json         # Project configuration
+├── package-lock.json    # Dependency lock file
 ├── tsconfig.json        # TypeScript configuration
-└── README.md           # This file
+├── README.md           # Documentation
+└── PROJECT_STATUS.md   # Project status and roadmap
 ```
 
 ## Development
