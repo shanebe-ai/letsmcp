@@ -45,6 +45,7 @@
 - [x] Build process tested
 - [x] Git repository initialized
 - [x] Code committed and pushed to GitHub
+- [x] Test script created and verified
 
 ---
 

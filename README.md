@@ -206,6 +206,33 @@ npm run build
 npm start
 ```
 
+## Testing
+
+### Quick Verification Test
+
+Run the included test script to verify tools are registered:
+
+```bash
+npx tsx test.ts
+```
+
+This confirms that both `echoText` and `summarizeDirectory` tools are properly set up.
+
+### Full Integration Testing
+
+For complete testing with a real MCP client:
+
+1. **Claude Desktop**: Configure in `claude_desktop_config.json` (see above)
+2. **MCP Inspector**: `npx @modelcontextprotocol/inspector node dist/index.js`
+   - Note: Inspector may have issues with stdio transport; use Claude Desktop for best results
+
+### Manual Testing
+
+Test the tools by asking Claude Desktop:
+- "Can you echo 'Hello, World!' for me?"
+- "Can you summarize the contents of C:\\Users\\shane\\Downloads?"
+
+
 ## Extending the Server
 
 ### Adding a New Tool
