@@ -17,8 +17,8 @@ A minimal [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server
 
 ```bash
 # Clone the repository
-git clone <your-repo-url>
-cd mcp
+git clone https://github.com/shanebe-ai/letsmcp.git
+cd letsmcp
 
 # Install dependencies
 npm install
@@ -262,6 +262,10 @@ server.setRequestHandler('resources/read', async (request) => {
 - [MCP Documentation](https://modelcontextprotocol.io)
 - [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 - [MCP Specification](https://spec.modelcontextprotocol.io)
+
+## Author
+
+**shanebe-ai** (shanebe@live.com)
 
 ## License
 
