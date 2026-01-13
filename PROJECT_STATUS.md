@@ -3,7 +3,7 @@
 **Project**: letsmcp - Minimal MCP Server  
 **Author**: shanebe-ai (shanebe@live.com)  
 **Repository**: https://github.com/shanebe-ai/letsmcp  
-**Status**: ✅ Initial Release (v1.0.0)  
+**Status**: ✅ v1.1.0 - Modular Refactoring Complete  
 **Last Updated**: 2026-01-13
 
 ---
@@ -17,9 +17,11 @@
 - [x] TypeScript implementation with strict type checking
 - [x] Express HTTP server for health monitoring
 - [x] Official MCP SDK integration (@modelcontextprotocol/sdk v1.0.4)
+- [x] Modular architecture (server.ts, tools.ts, index.ts)
 
 #### Tools
-- [x] `add` - Adds two numbers together
+- [x] `echoText` - Echoes back provided text
+- [x] `summarizeDirectory` - Lists files in a directory with metadata
 
 #### Resources
 - [x] `server://info` - Server metadata and capabilities
@@ -85,6 +87,16 @@
 ---
 
 ## Version History
+
+### v1.1.0 (2026-01-13)
+**Modular Refactoring**
+- Refactored to modular architecture
+- Separated tools into `src/tools.ts`
+- Separated server initialization into `src/server.ts`
+- Added `echoText` tool
+- Added `summarizeDirectory` tool
+- Removed `add` tool (replaced with more useful tools)
+- Updated documentation
 
 ### v1.0.0 (2026-01-13)
 **Initial Release**

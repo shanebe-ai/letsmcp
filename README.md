@@ -118,16 +118,29 @@ For development, you can use `tsx` instead:
 
 ## Available Tools
 
-### `add`
-Adds two numbers together.
+### `echoText`
+Echoes back the provided text.
 
 **Parameters:**
-- `a` (number): First number
-- `b` (number): Second number
+- `text` (string): Text to echo back
 
 **Example usage in Claude:**
 ```
-"Can you add 5 and 7 for me?"
+"Can you echo 'Hello, World!' for me?"
+```
+
+### `summarizeDirectory`
+Lists files in a directory with their metadata.
+
+**Parameters:**
+- `path` (string): Directory path to summarize
+
+**Returns:**
+- List of files with name, type (file/directory), and size in bytes
+
+**Example usage in Claude:**
+```
+"Can you summarize the contents of C:\Users\shane\Downloads?"
 ```
 
 ## Available Resources
