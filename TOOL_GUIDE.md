@@ -129,7 +129,7 @@ AI: [calls saveToFile to save it to "applications/google/cover-letter.txt"]
 Reads the contents of a file from your filesystem and returns it as text.
 
 ### Why You Need It
-**For JobOS and AI Apps:**
+**For AI Applications:**
 - Load your resume for AI to analyze
 - Read cover letter templates
 - Access job description files
@@ -234,7 +234,7 @@ AI: [analyzes both and provides comparison]
 Searches for text patterns within files in a directory using regular expressions.
 
 ### Why You Need It
-**For JobOS and AI Apps:**
+**For AI Applications:**
 - Find all applications mentioning "Python" in your notes
 - Search resumes for specific skills
 - Find job descriptions with salary ranges
@@ -344,7 +344,7 @@ AI: "I found React mentioned in 5 applications: Google, Meta, Netflix..."
 Executes shell commands on your system and returns the output.
 
 ### Why You Need It
-**For JobOS and AI Apps:**
+**For AI Applications:**
 - Run git commands to commit application materials
 - Execute npm scripts to build projects
 - Run tests before submitting code
@@ -458,7 +458,7 @@ AI: "Your resume has been committed to git!"
 Fetches content from a URL and optionally parses HTML to extract specific data.
 
 ### Why You Need It
-**For JobOS and AI Apps:**
+**For AI Applications:**
 - Fetch job postings from company websites
 - Get company information for research
 - Download public resumes/portfolios
