@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { registerTools } from './tools.js';
 import * as fs from 'fs/promises';
