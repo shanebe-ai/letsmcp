@@ -90,6 +90,68 @@ The `antigravity-mcp-config.json` file in this repository contains the reference
 
 ---
 
+## Cursor IDE Configuration
+
+Cursor IDE supports MCP servers similar to Claude Desktop and Antigravity.
+
+### Configuration File Location
+
+**Windows**: `%APPDATA%\Cursor\User\globalStorage\cursor-mcp\config.json`  
+**macOS**: `~/Library/Application Support/Cursor/User/globalStorage/cursor-mcp/config.json`  
+**Linux**: `~/.config/Cursor/User/globalStorage/cursor-mcp/config.json`
+
+### Configuration
+
+```json
+{
+  "mcpServers": {
+    "letsmcp": {
+      "command": "node",
+      "args": ["c:\\Users\\shane\\Downloads\\getwork\\mcp\\dist\\index.js"],
+      "env": {
+        "PORT": "3000",
+        "HOST": "localhost"
+      }
+    }
+  }
+}
+```
+
+### Using in Cursor
+
+1. **Configure the MCP server** (see above)
+2. **Restart Cursor IDE**
+3. **Open Command Palette** (`Ctrl+Shift+P` or `Cmd+Shift+P`)
+4. **Type "MCP"** to see available MCP commands
+5. **Use tools in chat**: Ask Cursor to use MCP tools
+   - "Use the letsmcp server to scrape this LinkedIn job"
+   - "Save this file using the MCP server"
+
+### Alternative: SSH for Remote Servers
+
+If your MCP server is deployed remotely, use SSH:
+
+```json
+{
+  "mcpServers": {
+    "letsmcp-remote": {
+      "command": "ssh",
+      "args": [
+        "user@your-server.com",
+        "node",
+        "/path/to/mcp/dist/index.js"
+      ],
+      "env": {
+        "PORT": "3000",
+        "HOST": "localhost"
+      }
+    }
+  }
+}
+```
+
+---
+
 ## Development Mode Configuration
 
 For development with auto-reload using `tsx`:

@@ -74,8 +74,8 @@ For production deployment, set `HOST=0.0.0.0` to accept health check connections
 
 Add to your Claude Desktop configuration file:
 
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`  
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ```json
 {
@@ -95,6 +95,28 @@ Add to your Claude Desktop configuration file:
 **Important**: Replace `/absolute/path/to/letsmcp` with your actual project path.
 
 > **📖 See [MCP_CONFIG.md](./MCP_CONFIG.md) for platform-specific examples and development mode configuration.**
+
+### Cursor IDE
+
+Add to your Cursor configuration file:
+
+**Windows**: `%APPDATA%\Cursor\User\globalStorage\cursor-mcp\config.json`  
+**macOS**: `~/Library/Application Support/Cursor/User/globalStorage/cursor-mcp/config.json`
+
+```json
+{
+  "mcpServers": {
+    "letsmcp": {
+      "command": "node",
+      "args": ["/absolute/path/to/letsmcp/dist/index.js"],
+      "env": {
+        "PORT": "3000",
+        "HOST": "localhost"
+      }
+    }
+  }
+}
+```
 
 ### Antigravity
 
@@ -228,28 +250,58 @@ Provides information about the MCP server including version, capabilities, and a
 
 ## Deployment
 
-### Railway
+Your MCP server can be deployed to cloud platforms for remote access.
 
-1. Install Railway CLI: `npm i -g @railway/cli`
-2. Login: `railway login`
-3. Initialize: `railway init`
-4. Deploy: `railway up`
-5. Set environment variables in Railway dashboard
+> **📖 For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md)**
 
-### Render
+### Quick Deploy Options
 
-1. Create new Web Service
-2. Connect your GitHub repository
-3. Set build command: `npm install && npm run build`
-4. Set start command: `npm start`
-5. Add environment variable: `HOST=0.0.0.0`
+#### Railway (Recommended for Beginners)
+```bash
+npm install -g @railway/cli
+railway login
+railway init
+railway up
+```
 
-### Fly.io
+#### Render
+1. Push to GitHub
+2. Connect repository in Render dashboard
+3. Deploy automatically
 
-1. Install flyctl: `curl -L https://fly.io/install.sh | sh`
-2. Login: `fly auth login`
-3. Launch: `fly launch`
-4. Deploy: `fly deploy`
+#### Fly.io
+```bash
+# Windows
+iwr https://fly.io/install.ps1 -useb | iex
+
+# Deploy
+fly launch
+fly deploy
+```
+
+### Remote Access
+
+Once deployed, you can:
+- **Access from anywhere** - Use MCP tools remotely
+- **Deploy with other apps** - Run alongside JobOS or other projects
+- **Share with team** - Multiple users can access the same server
+- **Always available** - No need to keep local machine running
+
+### Configuration for Remote Servers
+
+**For SSH access:**
+```json
+{
+  "mcpServers": {
+    "letsmcp-remote": {
+      "command": "ssh",
+      "args": ["user@your-server.com", "node", "/path/to/mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for complete deployment guides, environment variables, monitoring, and troubleshooting.
 
 ## Project Structure
 

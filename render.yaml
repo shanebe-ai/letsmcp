@@ -1,0 +1,22 @@
+{
+  "name": "letsmcp",
+  "type": "web",
+  "env": "node",
+  "buildCommand": "npm install && npm run build",
+  "startCommand": "npm start",
+  "healthCheckPath": "/health",
+  "envVars": [
+    {
+      "key": "PORT",
+      "value": "3000"
+    },
+    {
+      "key": "HOST",
+      "value": "0.0.0.0"
+    },
+    {
+      "key": "NODE_ENV",
+      "value": "production"
+    }
+  ]
+}
