@@ -16,7 +16,7 @@ export function createServer(): Server {
     const server = new Server(
         {
             name: 'letsmcp',
-            version: '1.1.0',
+            version: '2.0.0',
         },
         {
             capabilities: {
@@ -50,10 +50,10 @@ export function createServer(): Server {
                     {
                         uri: 'server://info',
                         mimeType: 'text/plain',
-                        text: `letsmcp MCP Server v1.1.0
+                        text: `letsmcp MCP Server v2.0.0
 Running on: ${HOST}:${PORT}
 Capabilities: Tools, Resources
-Available Tools: echoText, summarizeDirectory
+Available Tools: echoText, summarizeDirectory, saveToFile, readFile, searchFiles, executeCommand, webFetch, scrapeLinkedInJob
 Available Resources: server://info`,
                     },
                 ],

@@ -267,6 +267,254 @@ describe('MCP Tools', () => {
         });
     });
 
+    describe('saveToFile', () => {
+        const testFilesDir = path.join(process.cwd(), 'mcp-files');
+
+        afterEach(async () => {
+            // Clean up test files
+            try {
+                await fs.rm(testFilesDir, { recursive: true, force: true });
+            } catch (error) {
+                // Ignore cleanup errors
+            }
+        });
+
+        it('should save file successfully', async () => {
+            const result = await callTool('saveToFile', {
+                content: 'Test content',
+                filename: 'test.txt'
+            });
+
+            expect(result.isError).toBeUndefined();
+            const response = JSON.parse(result.content[0].text);
+            expect(response.success).toBe(true);
+            expect(response.path).toContain('test.txt');
+
+            // Verify file was created
+            const content = await fs.readFile(response.path, 'utf-8');
+            expect(content).toBe('Test content');
+        });
+
+        it('should save file with category', async () => {
+            const result = await callTool('saveToFile', {
+                content: 'Cover letter content',
+                filename: 'cover-letter.txt',
+                category: 'applications/google'
+            });
+
+            expect(result.isError).toBeUndefined();
+            const response = JSON.parse(result.content[0].text);
+            expect(response.path).toContain('applications');
+            expect(response.path).toContain('google');
+            expect(response.path).toContain('cover-letter.txt');
+        });
+
+        it('should prevent overwriting without permission', async () => {
+            // Create file first
+            await callTool('saveToFile', {
+                content: 'Original',
+                filename: 'test.txt'
+            });
+
+            // Try to overwrite
+            const result = await callTool('saveToFile', {
+                content: 'New content',
+                filename: 'test.txt'
+            });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0].text).toContain('already exists');
+        });
+
+        it('should allow overwriting with permission', async () => {
+            // Create file first
+            await callTool('saveToFile', {
+                content: 'Original',
+                filename: 'test.txt'
+            });
+
+            // Overwrite with permission
+            const result = await callTool('saveToFile', {
+                content: 'New content',
+                filename: 'test.txt',
+                overwrite: true
+            });
+
+            expect(result.isError).toBeUndefined();
+            const response = JSON.parse(result.content[0].text);
+
+            // Verify content was updated
+            const content = await fs.readFile(response.path, 'utf-8');
+            expect(content).toBe('New content');
+        });
+    });
+
+    describe('readFile', () => {
+        const testFilesDir = path.join(process.cwd(), 'test-read-files');
+
+        beforeEach(async () => {
+            await fs.mkdir(testFilesDir, { recursive: true });
+            await fs.writeFile(path.join(testFilesDir, 'test.txt'), 'Test content');
+        });
+
+        afterEach(async () => {
+            try {
+                await fs.rm(testFilesDir, { recursive: true, force: true });
+            } catch (error) {
+                // Ignore cleanup errors
+            }
+        });
+
+        it('should read file successfully', async () => {
+            const result = await callTool('readFile', {
+                path: 'test-read-files/test.txt'
+            });
+
+            expect(result.isError).toBeUndefined();
+            const response = JSON.parse(result.content[0].text);
+            expect(response.content).toBe('Test content');
+            expect(response.metadata.encoding).toBe('utf-8');
+        });
+
+        it('should return error for non-existent file', async () => {
+            const result = await callTool('readFile', {
+                path: 'non-existent.txt'
+            });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0].text).toContain('Error reading file');
+        });
+
+        it('should return error for directory', async () => {
+            const result = await callTool('readFile', {
+                path: 'test-read-files'
+            });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0].text).toContain('not a file');
+        });
+    });
+
+    describe('searchFiles', () => {
+        const testSearchDir = path.join(process.cwd(), 'test-search-dir');
+
+        beforeEach(async () => {
+            await fs.mkdir(testSearchDir, { recursive: true });
+            await fs.writeFile(path.join(testSearchDir, 'file1.txt'), 'Python is great\nJavaScript too');
+            await fs.writeFile(path.join(testSearchDir, 'file2.md'), 'I love Python programming');
+            await fs.writeFile(path.join(testSearchDir, 'file3.txt'), 'No matches here');
+        });
+
+        afterEach(async () => {
+            try {
+                await fs.rm(testSearchDir, { recursive: true, force: true });
+            } catch (error) {
+                // Ignore cleanup errors
+            }
+        });
+
+        it('should find matches in files', async () => {
+            const result = await callTool('searchFiles', {
+                query: 'Python',
+                path: 'test-search-dir'
+            });
+
+            expect(result.isError).toBeUndefined();
+            const response = JSON.parse(result.content[0].text);
+            expect(response.totalMatches).toBeGreaterThan(0);
+            expect(response.matches.some((m: any) => m.content.includes('Python'))).toBe(true);
+        });
+
+        it('should filter by file type', async () => {
+            const result = await callTool('searchFiles', {
+                query: 'Python',
+                path: 'test-search-dir',
+                fileTypes: ['txt']
+            });
+
+            expect(result.isError).toBeUndefined();
+            const response = JSON.parse(result.content[0].text);
+            expect(response.matches.every((m: any) => m.file.endsWith('.txt'))).toBe(true);
+        });
+
+        it('should respect maxResults', async () => {
+            const result = await callTool('searchFiles', {
+                query: 'Python',
+                path: 'test-search-dir',
+                maxResults: 1
+            });
+
+            expect(result.isError).toBeUndefined();
+            const response = JSON.parse(result.content[0].text);
+            expect(response.matches.length).toBeLessThanOrEqual(1);
+        });
+    });
+
+    describe('executeCommand', () => {
+        it('should execute simple command', async () => {
+            // Use node command which works cross-platform
+            const result = await callTool('executeCommand', {
+                command: 'node',
+                args: ['--version']
+            });
+
+            const response = JSON.parse(result.content[0].text);
+            expect(response.exitCode).toBe(0);
+            expect(response.stdout).toContain('v');
+        });
+
+        it('should handle command errors', async () => {
+            const result = await callTool('executeCommand', {
+                command: 'nonexistentcommand123'
+            });
+
+            expect(result.isError).toBe(true);
+        });
+
+        it('should return exit code for failed commands', async () => {
+            // This test is platform-dependent
+            // On Windows, we'll use a command that fails
+            const result = await callTool('executeCommand', {
+                command: 'cmd',
+                args: ['/c', 'exit 1']
+            });
+
+            expect(result.isError).toBeUndefined();
+            const response = JSON.parse(result.content[0].text);
+            expect(response.exitCode).toBe(1);
+        });
+    });
+
+    describe('webFetch', () => {
+        it('should fetch web content', async () => {
+            const result = await callTool('webFetch', {
+                url: 'https://example.com'
+            });
+
+            expect(result.isError).toBeUndefined();
+            const response = JSON.parse(result.content[0].text);
+            expect(response.metadata.statusCode).toBe(200);
+            expect(response.content).toContain('Example Domain');
+        });
+
+        it('should handle invalid URLs', async () => {
+            const result = await callTool('webFetch', {
+                url: 'not-a-url'
+            });
+
+            expect(result.isError).toBe(true);
+        });
+
+        it('should handle 404 errors', async () => {
+            const result = await callTool('webFetch', {
+                url: 'https://example.com/nonexistent-page-12345'
+            });
+
+            expect(result.isError).toBe(true);
+            expect(result.content[0].text).toContain('404');
+        });
+    });
+
     // Helper function to call tools
     async function callTool(name: string, args: any) {
         const handlers = (server as any)._requestHandlers;

@@ -6,11 +6,13 @@ A minimal [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server
 
 - ✅ **Stdio Transport**: Standard MCP transport for Claude Desktop and Antigravity
 - ✅ **HTTP Health Endpoint**: Monitor server status
-- ✅ **Two Tools**: `echoText` and `summarizeDirectory`
+- ✅ **8 Powerful Tools**: File operations, command execution, web scraping, and more
 - ✅ **One Resource**: `server://info` - provides server metadata
 - ✅ **Modular Architecture**: Separated tools and server logic
 - ✅ **Deployment Ready**: Can be deployed to cloud platforms
 - ✅ **TypeScript**: Full type safety with the official MCP SDK
+- ✅ **Comprehensive Tests**: Full test coverage with Vitest
+- ✅ **Production Ready**: Error handling, validation, and security measures
 
 ## Quick Start
 
@@ -107,29 +109,116 @@ Add to your Claude Desktop configuration file:
 
 ## Available Tools
 
-### `echoText`
-Echoes back the provided text.
+> **📖 For detailed documentation on each tool, see [TOOL_GUIDE.md](./TOOL_GUIDE.md)**
+
+### Core Tools
+
+#### `saveToFile`
+Saves text content to a file with automatic directory creation.
+
+**Parameters:**
+- `content` (string): Text content to save
+- `filename` (string): Name of the file
+- `category` (string, optional): Folder/category for organization
+- `overwrite` (boolean, optional): Allow overwriting existing files
+
+**Example:**
+```
+"Save this cover letter to applications/google/cover-letter.txt"
+```
+
+#### `readFile`
+Reads file contents and returns them as text.
+
+**Parameters:**
+- `path` (string): Path to the file
+- `encoding` (string, optional): File encoding (default: utf-8)
+- `maxSize` (number, optional): Maximum file size in bytes
+
+**Example:**
+```
+"Read my resume from resume.txt"
+```
+
+#### `searchFiles`
+Searches for text patterns within files using regex.
+
+**Parameters:**
+- `query` (string): Search pattern
+- `path` (string): Directory to search
+- `fileTypes` (array, optional): Filter by file extensions
+- `caseSensitive` (boolean, optional): Case-sensitive search
+- `maxResults` (number, optional): Maximum results to return
+- `recursive` (boolean, optional): Search subdirectories
+
+**Example:**
+```
+"Search for 'Python' in my applications folder"
+```
+
+#### `executeCommand`
+Executes shell commands and returns output.
+
+**Parameters:**
+- `command` (string): Command to execute
+- `args` (array, optional): Command arguments
+- `cwd` (string, optional): Working directory
+- `timeout` (number, optional): Timeout in milliseconds
+
+**Example:**
+```
+"Run git status in my project"
+```
+
+#### `webFetch`
+Fetches content from a URL and optionally parses HTML.
+
+**Parameters:**
+- `url` (string): URL to fetch
+- `selector` (string, optional): CSS selector to extract content
+- `format` (string, optional): Output format (text/html/json)
+- `timeout` (number, optional): Request timeout
+
+**Example:**
+```
+"Fetch the content from https://example.com"
+```
+
+#### `scrapeLinkedInJob`
+Scrapes job details from LinkedIn job postings using browser automation.
+
+**Parameters:**
+- `url` (string): LinkedIn job URL
+- `includeDescription` (boolean, optional): Include full description
+- `screenshot` (boolean, optional): Save screenshot
+
+**Example:**
+```
+"Scrape this LinkedIn job: https://www.linkedin.com/jobs/view/123456789"
+```
+
+### Utility Tools
+
+#### `echoText`
+Echoes back the provided text. Useful for testing.
 
 **Parameters:**
 - `text` (string): Text to echo back
 
-**Example usage in Claude:**
+**Example:**
 ```
-"Can you echo 'Hello, World!' for me?"
+"Echo 'Hello, World!' for me"
 ```
 
-### `summarizeDirectory`
+#### `summarizeDirectory`
 Lists files in a directory with their metadata.
 
 **Parameters:**
 - `path` (string): Directory path to summarize
 
-**Returns:**
-- List of files with name, type (file/directory), and size in bytes
-
-**Example usage in Claude:**
+**Example:**
 ```
-"Can you summarize the contents of C:\Users\shane\Downloads?"
+"Summarize the contents of my Downloads folder"
 ```
 
 ## Available Resources

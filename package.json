@@ -1,6 +1,6 @@
 {
   "name": "minimal-mcp-server",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "A minimal Model Context Protocol (MCP) server in TypeScript with HTTP transport",
   "main": "dist/index.js",
   "type": "module",
@@ -24,8 +24,11 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
+    "cheerio": "^1.1.2",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "node-fetch": "^3.3.2",
+    "playwright": "^1.57.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

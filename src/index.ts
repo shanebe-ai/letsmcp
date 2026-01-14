@@ -16,7 +16,7 @@ const app = express();
 
 // Health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
-    res.json({ status: 'ok', server: 'letsmcp', version: '1.1.0' });
+    res.json({ status: 'ok', server: 'letsmcp', version: '2.0.0' });
 });
 
 // Start HTTP server for health checks
