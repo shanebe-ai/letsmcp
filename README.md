@@ -64,21 +64,23 @@ HOST=localhost
 
 For production deployment, set `HOST=0.0.0.0` to accept health check connections from any IP.
 
+> **📖 For detailed MCP client configuration instructions, see [MCP_CONFIG.md](./MCP_CONFIG.md)**
+
 ## Connecting to Clients
 
 ### Claude Desktop
 
 Add to your Claude Desktop configuration file:
 
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
-    "minimal-mcp": {
+    "letsmcp": {
       "command": "node",
-      "args": ["/absolute/path/to/mcp/dist/index.js"],
+      "args": ["/absolute/path/to/letsmcp/dist/index.js"],
       "env": {
         "PORT": "3000",
         "HOST": "localhost"
@@ -88,23 +90,9 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
-**Important**: Replace `/absolute/path/to/mcp` with the actual absolute path to your project directory.
+**Important**: Replace `/absolute/path/to/letsmcp` with your actual project path.
 
-For development, you can use `tsx` instead:
-```json
-{
-  "mcpServers": {
-    "minimal-mcp": {
-      "command": "npx",
-      "args": ["-y", "tsx", "/absolute/path/to/mcp/src/index.ts"],
-      "env": {
-        "PORT": "3000",
-        "HOST": "localhost"
-      }
-    }
-  }
-}
-```
+> **📖 See [MCP_CONFIG.md](./MCP_CONFIG.md) for platform-specific examples and development mode configuration.**
 
 ### Antigravity
 
