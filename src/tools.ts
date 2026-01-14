@@ -32,7 +32,7 @@ export interface DirectoryEntry {
  */
 function validateEchoTextInput(args: unknown): args is EchoTextInput {
     const input = args as Record<string, unknown>;
-    return typeof input.text === 'string' && input.text.length > 0;
+    return typeof input.text === 'string';
 }
 
 function validateSummarizeDirectoryInput(args: unknown): args is SummarizeDirectoryInput {
@@ -90,26 +90,44 @@ export function registerTools(server: Server) {
 
         switch (request.params.name) {
             case 'echoText': {
-                // Validate input
+                // Validate input type
                 if (!validateEchoTextInput(args)) {
                     return {
                         content: [
                             {
                                 type: 'text',
-                                text: 'Error: Invalid input. Expected { text: string } where text is non-empty.',
+                                text: 'Error: Invalid input. Expected { text: string }.',
                             },
                         ],
                         isError: true,
                     };
                 }
 
-                // Execute tool with typed input
                 const input: EchoTextInput = args;
+
+                // Check for empty input and provide friendly error
+                if (!input.text || input.text.trim().length === 0) {
+                    return {
+                        content: [
+                            {
+                                type: 'text',
+                                text: 'Oops! It looks like you sent me empty text. Please provide some text to echo back. 😊',
+                            },
+                        ],
+                        isError: true,
+                    };
+                }
+
+                // Return structured response
+                const response = {
+                    echoed: input.text
+                };
+
                 return {
                     content: [
                         {
                             type: 'text' as const,
-                            text: `Echo: ${input.text}`,
+                            text: JSON.stringify(response, null, 2),
                         },
                     ],
                 };
@@ -132,32 +150,73 @@ export function registerTools(server: Server) {
                 const input: SummarizeDirectoryInput = args;
 
                 try {
-                    // Read directory with proper error handling
-                    const entries = await fs.readdir(input.path, { withFileTypes: true });
+                    // Resolve path relative to project root (current working directory)
+                    const resolvedPath = path.resolve(process.cwd(), input.path);
 
-                    // Build directory entry list with types
-                    const directoryEntries: DirectoryEntry[] = await Promise.all(
-                        entries.map(async (entry) => {
-                            const fullPath = path.join(input.path, entry.name);
-                            const stats = await fs.stat(fullPath);
-                            return {
-                                name: entry.name,
-                                type: entry.isDirectory() ? 'directory' as const : 'file' as const,
-                                size: stats.size,
-                            };
-                        })
-                    );
+                    // Check if path exists
+                    try {
+                        await fs.access(resolvedPath);
+                    } catch {
+                        return {
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: `The directory "${input.path}" doesn't seem to exist. Please check the path and try again. 📁`,
+                                },
+                            ],
+                            isError: true,
+                        };
+                    }
 
-                    // Format output
-                    const summaryLines = directoryEntries.map(
-                        (item) => `${item.name} (${item.type}, ${item.size.toLocaleString()} bytes)`
-                    );
+                    // Read directory entries
+                    const entries = await fs.readdir(resolvedPath, { withFileTypes: true });
+
+                    // Separate files and directories
+                    const files = entries.filter(e => e.isFile());
+                    const directories = entries.filter(e => e.isDirectory());
+
+                    const totalFiles = files.length;
+                    const totalDirs = directories.length;
+                    const totalItems = entries.length;
+
+                    // Limit to 20 items for display
+                    const displayLimit = 20;
+                    const itemsToShow = entries.slice(0, displayLimit);
+
+                    // Get a few example names
+                    const exampleFiles = files.slice(0, 3).map(f => f.name);
+                    const exampleDirs = directories.slice(0, 3).map(d => d.name);
+
+                    // Build plain-text summary
+                    let summary = `Directory: ${input.path}\n\n`;
+                    summary += `Found ${totalFiles} file${totalFiles !== 1 ? 's' : ''} and ${totalDirs} director${totalDirs !== 1 ? 'ies' : 'y'} (${totalItems} total)\n\n`;
+
+                    if (exampleFiles.length > 0) {
+                        summary += `Example files: ${exampleFiles.join(', ')}\n`;
+                    }
+                    if (exampleDirs.length > 0) {
+                        summary += `Example directories: ${exampleDirs.join(', ')}\n`;
+                    }
+
+                    if (totalItems > displayLimit) {
+                        summary += `\nShowing first ${displayLimit} of ${totalItems} items:\n`;
+                    } else if (totalItems > 0) {
+                        summary += `\nAll items:\n`;
+                    }
+
+                    // List items (up to 20)
+                    if (itemsToShow.length > 0) {
+                        const itemList = itemsToShow.map(item =>
+                            `  ${item.isDirectory() ? '📁' : '📄'} ${item.name}`
+                        ).join('\n');
+                        summary += itemList;
+                    }
 
                     return {
                         content: [
                             {
                                 type: 'text' as const,
-                                text: `Directory: ${input.path}\n\nTotal items: ${directoryEntries.length}\n\n${summaryLines.join('\n')}`,
+                                text: summary,
                             },
                         ],
                     };
@@ -168,7 +227,7 @@ export function registerTools(server: Server) {
                         content: [
                             {
                                 type: 'text',
-                                text: `Error reading directory "${input.path}": ${errorMessage}`,
+                                text: `Oops! Something went wrong reading "${input.path}": ${errorMessage}`,
                             },
                         ],
                         isError: true,

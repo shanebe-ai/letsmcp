@@ -1,0 +1,14 @@
+{
+    "mcpServers": {
+        "letsmcp": {
+            "command": "node",
+            "args": [
+                "c:/Users/shane/Downloads/getwork/mcp/dist/index.js"
+            ],
+            "env": {
+                "PORT": "3000",
+                "HOST": "localhost"
+            }
+        }
+    }
+}
