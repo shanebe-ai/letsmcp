@@ -73,7 +73,7 @@
 
 ### 📋 Planned Features
 
-#### Phase 3: JobOS Integration
+#### Phase 3: Application Integration
 - [ ] Job application tracking tool
 - [ ] Resume analysis tool
 - [ ] Cover letter generation templates
@@ -189,7 +189,7 @@ This is a personal project by shanebe-ai. Contributions, issues, and feature req
 - HTTP endpoint is for health checks only
 - Designed for easy extension and customization
 - Production-ready with comprehensive error handling
-- Ideal for JobOS integration and AI-powered workflows
+- Ideal for application integration and AI-powered workflows
 
 ---
 

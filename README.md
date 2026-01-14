@@ -283,7 +283,7 @@ fly deploy
 
 Once deployed, you can:
 - **Access from anywhere** - Use MCP tools remotely
-- **Deploy with other apps** - Run alongside JobOS or other projects
+- **Deploy with other apps** - Run alongside your applications
 - **Share with team** - Multiple users can access the same server
 - **Always available** - No need to keep local machine running
 

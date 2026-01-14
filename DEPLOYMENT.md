@@ -8,13 +8,45 @@ This guide covers deploying your MCP server to various cloud platforms for remot
 
 - **Access from anywhere** - Use MCP tools from any device
 - **Share with team** - Multiple users can access the same server
-- **Deploy with other apps** - Run alongside JobOS or other applications
+- **Deploy with other apps** - Run alongside your applications
 - **Always available** - No need to keep local machine running
 - **Production ready** - Scalable and reliable infrastructure
 
 ---
 
 ## Deployment Options
+
+### Self-Hosted (Your Own Server)
+
+Deploy on your own VPS, dedicated server, or local server for maximum control.
+
+**Best for:**
+- Full control over infrastructure
+- Deploying alongside other apps
+- Cost-effective for long-term use
+- No vendor lock-in
+
+> **📖 See [SELF_HOSTED.md](./SELF_HOSTED.md) for complete self-hosted deployment guide**
+
+**Quick start:**
+```bash
+# On your server
+git clone https://github.com/shanebe-ai/letsmcp.git /opt/mcp
+cd /opt/mcp
+npm install && npm run build
+npm install -g pm2
+pm2 start dist/index.js --name mcp
+pm2 save && pm2 startup
+```
+
+**Recommended VPS providers:**
+- DigitalOcean ($6/month)
+- Linode ($5/month)
+- Hetzner (€4.51/month)
+
+---
+
+## Managed Platform Deployment
 
 ### Option 1: Railway (Recommended for Beginners)
 
@@ -211,7 +243,7 @@ Cursor can connect to remote MCP servers via SSH:
 }
 ```
 
-#### For Direct API Access (JobOS, etc.)
+#### For Direct API Access
 
 Use the MCP SDK to connect via HTTP:
 
@@ -229,9 +261,9 @@ const client = new Client(
 
 ---
 
-## Deploy Alongside JobOS
+## Deploy Alongside Other Applications
 
-If you're deploying JobOS to a server, you can deploy the MCP server on the same machine:
+If you're deploying another application to a server, you can deploy the MCP server on the same machine:
 
 ### On Your Server:
 
@@ -239,15 +271,15 @@ If you're deploying JobOS to a server, you can deploy the MCP server on the same
 # Install both apps
 cd /home/user
 git clone https://github.com/shanebe-ai/letsmcp.git mcp
-git clone https://github.com/shanebe-ai/jobos.git jobos
+git clone https://github.com/your-org/your-app.git your-app
 
 # Setup MCP server
 cd mcp
 npm install
 npm run build
 
-# Setup JobOS
-cd ../jobos
+# Setup your application
+cd ../your-app
 npm install
 npm run build
 
@@ -255,7 +287,7 @@ npm run build
 npm install -g pm2
 
 pm2 start mcp/dist/index.js --name mcp
-pm2 start jobos/dist/server.js --name jobos
+pm2 start your-app/dist/server.js --name your-app
 
 # Save PM2 configuration
 pm2 save
@@ -267,10 +299,10 @@ pm2 startup
 ```nginx
 # /etc/nginx/sites-available/apps
 
-# JobOS
+# Your Application
 server {
     listen 80;
-    server_name jobos.yourdomain.com;
+    server_name app.yourdomain.com;
     
     location / {
         proxy_pass http://localhost:3001;

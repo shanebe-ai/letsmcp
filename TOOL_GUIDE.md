@@ -23,7 +23,7 @@ This guide provides a comprehensive explanation of each tool in your MCP server,
 Saves text content to a file on your filesystem. If the directory doesn't exist, it creates it automatically.
 
 ### Why You Need It
-**For JobOS and AI Apps:**
+**For AI Applications:**
 - Save AI-generated cover letters to organized folders
 - Store job application notes and research
 - Create logs of AI conversations
@@ -573,7 +573,7 @@ AI: "Here's what I found about Google's culture..."
 Uses browser automation to scrape job details from LinkedIn job postings, extracting structured data like title, company, description, requirements, and salary.
 
 ### Why You Need It
-**For JobOS:**
+**For AI Applications:**
 - Automatically extract job details for analysis
 - Save job postings before they expire
 - Compare multiple job postings
@@ -785,7 +785,7 @@ All items:
 
 ## Best Practices
 
-### For JobOS Integration
+### For Application Integration
 1. **Organize files**: Use `saveToFile` with categories
 2. **Template system**: Use `readFile` to load templates
 3. **Track applications**: Save job details with `scrapeLinkedInJob`
