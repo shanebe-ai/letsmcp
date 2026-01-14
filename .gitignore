@@ -28,3 +28,6 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+# Project-specific integration guides
+JOBOS_INTEGRATION.md
