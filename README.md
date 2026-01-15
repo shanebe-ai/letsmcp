@@ -1,18 +1,29 @@
-# Minimal MCP Server
+# LetsMCP - AI-Powered MCP Server
 
-A minimal [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server implementation in TypeScript with stdio transport, ready for local development and remote deployment.
+A powerful [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server with integrated AI capabilities. Supports multiple AI providers (Groq, Claude, Gemini) with automatic fallback, LinkedIn job scraping, and a REST API for external application integration.
 
 ## Features
 
-- ✅ **Stdio Transport**: Standard MCP transport for Claude Desktop and Antigravity
-- ✅ **HTTP Health Endpoint**: Monitor server status
-- ✅ **8 Powerful Tools**: File operations, command execution, web scraping, and more
+### MCP Server
+- ✅ **Stdio Transport**: Standard MCP transport for Claude Desktop, Cursor, and Antigravity
+- ✅ **HTTP Health Endpoint**: Monitor server status at `/health`
+- ✅ **8 MCP Tools**: File operations, command execution, web scraping, and more
 - ✅ **One Resource**: `server://info` - provides server metadata
-- ✅ **Modular Architecture**: Separated tools and server logic
-- ✅ **Deployment Ready**: Can be deployed to cloud platforms
+
+### AI Integration (NEW)
+- ✅ **Multi-Provider AI**: Groq (Llama 3.1), Claude (Anthropic), and Google Gemini
+- ✅ **Automatic Fallback**: If one provider fails, automatically tries the next
+- ✅ **REST API**: HTTP endpoints for external applications (like JobOS)
+- ✅ **LinkedIn Scraping**: Browser-based job scraping with Playwright
+- ✅ **Job Extraction**: AI-powered extraction of job details from text/URLs
+- ✅ **Resume Analysis**: Compare resumes against job descriptions
+- ✅ **Email Drafting**: Generate professional outreach emails
+
+### Infrastructure
 - ✅ **TypeScript**: Full type safety with the official MCP SDK
-- ✅ **Comprehensive Tests**: Full test coverage with Vitest
+- ✅ **Comprehensive Tests**: Unit tests with Vitest
 - ✅ **Production Ready**: Error handling, validation, and security measures
+- ✅ **Deployment Ready**: Railway, Render, Fly.io support
 
 ## Quick Start
 
@@ -26,11 +37,39 @@ cd letsmcp
 # Install dependencies
 npm install
 
-# Copy environment file
+# Copy environment file and add your API keys
 cp .env.example .env
 ```
 
-### Running Locally
+### Configuration
+
+Edit `.env` with your API keys:
+
+```env
+# Server Configuration
+PORT=3002
+HOST=0.0.0.0
+
+# AI Provider API Keys (at least one required for AI features)
+GROQ_API_KEY=your_groq_key_here
+GROQ_MODEL=llama-3.1-70b-versatile
+
+CLAUDE_API_KEY=your_claude_key_here
+CLAUDE_MODEL=claude-3-5-sonnet-20241022
+
+GEMINI_API_KEY=your_gemini_key_here
+GEMINI_MODEL=gemini-1.5-flash
+
+# Default AI provider (groq, claude, or gemini)
+DEFAULT_AI_PROVIDER=groq
+```
+
+Get your API keys from:
+- **Groq**: https://console.groq.com/keys
+- **Claude**: https://console.anthropic.com/settings/keys
+- **Gemini**: https://aistudio.google.com/app/apikey
+
+### Running
 
 ```bash
 # Development mode (with auto-reload)
@@ -43,38 +82,180 @@ npm start
 
 The server will start with:
 - **MCP communication**: stdio (standard input/output)
-- **Health endpoint**: `http://localhost:3000/health`
+- **HTTP API**: `http://localhost:3002/api/*`
+- **Health endpoint**: `http://localhost:3002/health`
 
-### Testing
+## REST API Endpoints
+
+### Status & Configuration
+
+#### `GET /api/status`
+Returns server status and configured AI providers.
 
 ```bash
-# Check if HTTP server is running
-curl http://localhost:3000/health
-
-# Expected response:
-# {"status":"ok","server":"minimal-mcp-server","version":"1.0.0"}
+curl http://localhost:3002/api/status
 ```
 
-## Configuration
-
-Edit `.env` to configure the HTTP health endpoint:
-
-```env
-PORT=3000
-HOST=localhost
+Response:
+```json
+{
+  "status": "ok",
+  "version": "2.0.0",
+  "providers": ["groq", "gemini"],
+  "hasAI": true
+}
 ```
 
-For production deployment, set `HOST=0.0.0.0` to accept health check connections from any IP.
+#### `POST /api/config`
+Update AI provider configuration at runtime.
 
-> **📖 For detailed MCP client configuration instructions, see [MCP_CONFIG.md](./MCP_CONFIG.md)**
+```bash
+curl -X POST http://localhost:3002/api/config \
+  -H "Content-Type: application/json" \
+  -d '{"groq": {"apiKey": "your_key"}, "defaultProvider": "groq"}'
+```
 
-## Connecting to Clients
+### AI Features
+
+#### `POST /api/generate`
+Generate text using AI.
+
+```bash
+curl -X POST http://localhost:3002/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Write a brief introduction for a software engineer", "provider": "groq"}'
+```
+
+#### `POST /api/extract-job`
+Extract job details from text or URL. Automatically uses LinkedIn scraper for LinkedIn URLs.
+
+```bash
+# From text
+curl -X POST http://localhost:3002/api/extract-job \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Senior Software Engineer at Google, Mountain View, CA..."}'
+
+# From LinkedIn URL
+curl -X POST http://localhost:3002/api/extract-job \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.linkedin.com/jobs/view/123456789"}'
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": {
+    "title": "Senior Software Engineer",
+    "company": "Google",
+    "location": "Mountain View, CA",
+    "description": "...",
+    "salary": "$150,000 - $200,000"
+  },
+  "provider": "groq"
+}
+```
+
+#### `POST /api/scrape-linkedin`
+Directly scrape a LinkedIn job posting.
+
+```bash
+curl -X POST http://localhost:3002/api/scrape-linkedin \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.linkedin.com/jobs/view/123456789", "screenshot": false}'
+```
+
+#### `POST /api/analyze-resume`
+Analyze how well a resume matches a job description.
+
+```bash
+curl -X POST http://localhost:3002/api/analyze-resume \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jobDescription": "We are looking for a React developer...",
+    "resumeText": "5 years experience with React, TypeScript..."
+  }'
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": {
+    "matchScore": 85,
+    "strengths": ["React experience", "TypeScript proficiency"],
+    "gaps": ["No mention of testing frameworks"],
+    "recommendations": ["Add Jest/Cypress experience"],
+    "keywords": {
+      "matched": ["React", "TypeScript", "Node.js"],
+      "missing": ["Jest", "CI/CD"]
+    }
+  },
+  "provider": "groq"
+}
+```
+
+#### `POST /api/draft-email`
+Draft a professional outreach email.
+
+```bash
+curl -X POST http://localhost:3002/api/draft-email \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipientName": "John Smith",
+    "recipientRole": "Engineering Manager",
+    "companyName": "TechCorp",
+    "jobTitle": "Senior Engineer",
+    "tone": "Professional",
+    "intent": "Connect"
+  }'
+```
+
+Response:
+```json
+{
+  "success": true,
+  "data": {
+    "subject": "Connecting about opportunities at TechCorp",
+    "body": "Hi John,\n\nI've been following TechCorp's work...",
+    "confidence": 85
+  },
+  "provider": "groq"
+}
+```
+
+**Intent options**: `Connect`, `FollowUp`, `ReferralRequest`, `PeerOutreach`
+**Tone options**: `Formal`, `Casual`, `Enthusiastic`, `Professional`
+
+## MCP Tools
+
+### Core Tools
+
+| Tool | Description |
+|------|-------------|
+| `saveToFile` | Save text content to a file with auto directory creation |
+| `readFile` | Read file contents as text |
+| `searchFiles` | Search for patterns in files using regex |
+| `executeCommand` | Execute shell commands |
+| `webFetch` | Fetch and parse web content |
+| `scrapeLinkedInJob` | Scrape LinkedIn job postings with Playwright |
+
+### Utility Tools
+
+| Tool | Description |
+|------|-------------|
+| `echoText` | Echo back text (for testing) |
+| `summarizeDirectory` | List directory contents with metadata |
+
+> **📖 For detailed tool documentation, see [TOOL_GUIDE.md](./TOOL_GUIDE.md)**
+
+## Connecting MCP Clients
 
 ### Claude Desktop
 
-Add to your Claude Desktop configuration file:
+Add to your Claude Desktop configuration:
 
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`  
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ```json
@@ -82,25 +263,22 @@ Add to your Claude Desktop configuration file:
   "mcpServers": {
     "letsmcp": {
       "command": "node",
-      "args": ["/absolute/path/to/letsmcp/dist/index.js"],
+      "args": ["/path/to/letsmcp/dist/index.js"],
       "env": {
-        "PORT": "3000",
-        "HOST": "localhost"
+        "PORT": "3002",
+        "HOST": "localhost",
+        "GROQ_API_KEY": "your_key_here"
       }
     }
   }
 }
 ```
 
-**Important**: Replace `/absolute/path/to/letsmcp` with your actual project path.
-
-> **📖 See [MCP_CONFIG.md](./MCP_CONFIG.md) for platform-specific examples and development mode configuration.**
-
 ### Cursor IDE
 
-Add to your Cursor configuration file:
+Add to Cursor configuration:
 
-**Windows**: `%APPDATA%\Cursor\User\globalStorage\cursor-mcp\config.json`  
+**Windows**: `%APPDATA%\Cursor\User\globalStorage\cursor-mcp\config.json`
 **macOS**: `~/Library/Application Support/Cursor/User/globalStorage/cursor-mcp/config.json`
 
 ```json
@@ -108,218 +286,70 @@ Add to your Cursor configuration file:
   "mcpServers": {
     "letsmcp": {
       "command": "node",
-      "args": ["/absolute/path/to/letsmcp/dist/index.js"],
+      "args": ["/path/to/letsmcp/dist/index.js"],
       "env": {
-        "PORT": "3000",
-        "HOST": "localhost"
+        "PORT": "3002",
+        "GROQ_API_KEY": "your_key_here"
       }
     }
   }
 }
 ```
 
-### Antigravity
+> **📖 See [MCP_CONFIG.md](./MCP_CONFIG.md) for more configuration options**
 
-1. Open Antigravity settings
-2. Navigate to MCP Servers
-3. Add new server with:
-   - **Type**: stdio
-   - **Command**: `node`
-   - **Args**: `/absolute/path/to/mcp/dist/index.js`
-   - **Environment**: `PORT=3000`, `HOST=localhost`
-4. Save and connect
+## Integration with External Apps
 
-## Available Tools
+LetsMCP provides a REST API that can be used by any application. For example, [JobOS](https://github.com/shanebe-ai/JobOS) uses LetsMCP for:
 
-> **📖 For detailed documentation on each tool, see [TOOL_GUIDE.md](./TOOL_GUIDE.md)**
+- **Magic Paste**: Extracts job details from pasted text or LinkedIn URLs
+- **Resume Analyst**: AI-powered resume vs job description analysis
+- **Email Drafter**: Generates professional outreach emails
 
-### Core Tools
+### Example: JobOS Integration
 
-#### `saveToFile`
-Saves text content to a file with automatic directory creation.
+```typescript
+// Check if LetsMCP is available
+const response = await fetch('http://localhost:3002/api/status');
+const { hasAI } = await response.json();
 
-**Parameters:**
-- `content` (string): Text content to save
-- `filename` (string): Name of the file
-- `category` (string, optional): Folder/category for organization
-- `overwrite` (boolean, optional): Allow overwriting existing files
-
-**Example:**
-```
-"Save this cover letter to applications/google/cover-letter.txt"
-```
-
-#### `readFile`
-Reads file contents and returns them as text.
-
-**Parameters:**
-- `path` (string): Path to the file
-- `encoding` (string, optional): File encoding (default: utf-8)
-- `maxSize` (number, optional): Maximum file size in bytes
-
-**Example:**
-```
-"Read my resume from resume.txt"
-```
-
-#### `searchFiles`
-Searches for text patterns within files using regex.
-
-**Parameters:**
-- `query` (string): Search pattern
-- `path` (string): Directory to search
-- `fileTypes` (array, optional): Filter by file extensions
-- `caseSensitive` (boolean, optional): Case-sensitive search
-- `maxResults` (number, optional): Maximum results to return
-- `recursive` (boolean, optional): Search subdirectories
-
-**Example:**
-```
-"Search for 'Python' in my applications folder"
-```
-
-#### `executeCommand`
-Executes shell commands and returns output.
-
-**Parameters:**
-- `command` (string): Command to execute
-- `args` (array, optional): Command arguments
-- `cwd` (string, optional): Working directory
-- `timeout` (number, optional): Timeout in milliseconds
-
-**Example:**
-```
-"Run git status in my project"
-```
-
-#### `webFetch`
-Fetches content from a URL and optionally parses HTML.
-
-**Parameters:**
-- `url` (string): URL to fetch
-- `selector` (string, optional): CSS selector to extract content
-- `format` (string, optional): Output format (text/html/json)
-- `timeout` (number, optional): Request timeout
-
-**Example:**
-```
-"Fetch the content from https://example.com"
-```
-
-#### `scrapeLinkedInJob`
-Scrapes job details from LinkedIn job postings using browser automation.
-
-**Parameters:**
-- `url` (string): LinkedIn job URL
-- `includeDescription` (boolean, optional): Include full description
-- `screenshot` (boolean, optional): Save screenshot
-
-**Example:**
-```
-"Scrape this LinkedIn job: https://www.linkedin.com/jobs/view/123456789"
-```
-
-### Utility Tools
-
-#### `echoText`
-Echoes back the provided text. Useful for testing.
-
-**Parameters:**
-- `text` (string): Text to echo back
-
-**Example:**
-```
-"Echo 'Hello, World!' for me"
-```
-
-#### `summarizeDirectory`
-Lists files in a directory with their metadata.
-
-**Parameters:**
-- `path` (string): Directory path to summarize
-
-**Example:**
-```
-"Summarize the contents of my Downloads folder"
-```
-
-## Available Resources
-
-### `server://info`
-Provides information about the MCP server including version, capabilities, and available tools/resources.
-
-## Deployment
-
-Your MCP server can be deployed to cloud platforms for remote access.
-
-> **📖 For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md)**
-
-### Quick Deploy Options
-
-#### Railway (Recommended for Beginners)
-```bash
-npm install -g @railway/cli
-railway login
-railway init
-railway up
-```
-
-#### Render
-1. Push to GitHub
-2. Connect repository in Render dashboard
-3. Deploy automatically
-
-#### Fly.io
-```bash
-# Windows
-iwr https://fly.io/install.ps1 -useb | iex
-
-# Deploy
-fly launch
-fly deploy
-```
-
-### Remote Access
-
-Once deployed, you can:
-- **Access from anywhere** - Use MCP tools remotely
-- **Deploy with other apps** - Run alongside your applications
-- **Share with team** - Multiple users can access the same server
-- **Always available** - No need to keep local machine running
-
-### Configuration for Remote Servers
-
-**For SSH access:**
-```json
-{
-  "mcpServers": {
-    "letsmcp-remote": {
-      "command": "ssh",
-      "args": ["user@your-server.com", "node", "/path/to/mcp/dist/index.js"]
-    }
-  }
+if (hasAI) {
+  // Use LetsMCP for AI features
+  const result = await fetch('http://localhost:3002/api/extract-job', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: linkedInUrl })
+  });
 }
 ```
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for complete deployment guides, environment variables, monitoring, and troubleshooting.
 
 ## Project Structure
 
 ```
 letsmcp/
 ├── src/
-│   ├── index.ts          # Main entry point (HTTP + stdio transport)
-│   ├── server.ts         # MCP server initialization
-│   └── tools.ts          # Tool definitions (echoText, summarizeDirectory)
-├── dist/                 # Compiled JavaScript (generated)
-├── node_modules/         # Dependencies (generated)
-├── .env.example          # Environment template
-├── .gitignore           # Git ignore rules
-├── package.json         # Project configuration
-├── package-lock.json    # Dependency lock file
-├── tsconfig.json        # TypeScript configuration
-├── README.md           # Documentation
-└── PROJECT_STATUS.md   # Project status and roadmap
+│   ├── index.ts              # Main entry (HTTP server + MCP stdio)
+│   ├── server.ts             # MCP server initialization
+│   ├── tools.ts              # MCP tool definitions
+│   ├── api/
+│   │   ├── index.ts          # API exports
+│   │   └── routes.ts         # REST API route handlers
+│   └── ai/
+│       ├── index.ts          # AI exports
+│       ├── types.ts          # TypeScript interfaces
+│       ├── prompts.ts        # Shared AI prompts
+│       ├── service.ts        # Unified AI service with fallback
+│       └── providers/
+│           ├── index.ts      # Provider exports
+│           ├── groq.ts       # Groq (Llama 3.1) provider
+│           ├── claude.ts     # Claude (Anthropic) provider
+│           └── gemini.ts     # Google Gemini provider
+├── src/__tests__/            # Unit tests
+├── dist/                     # Compiled JavaScript
+├── .env.example              # Environment template
+├── package.json              # Project configuration
+├── tsconfig.json             # TypeScript configuration
+└── README.md                 # This file
 ```
 
 ## Development
@@ -328,120 +358,78 @@ letsmcp/
 # Type checking
 npm run typecheck
 
-# Build
-npm run build
+# Run tests
+npm test
 
-# Run built version
-npm start
+# Run tests in watch mode
+npm run test:watch
+
+# Build for production
+npm run build
 ```
 
 ## Testing
 
-### Quick Verification Test
+```bash
+# Run all tests
+npm test
 
-Run the included test script to verify tools are registered:
+# Test with coverage
+npm run test:coverage
+
+# Quick health check
+curl http://localhost:3002/health
+
+# Test AI status
+curl http://localhost:3002/api/status
+```
+
+## Deployment
+
+### Using PM2 (Recommended for VPS)
 
 ```bash
-npx tsx test.ts
+# Install PM2
+npm install -g pm2
+
+# Start with PM2
+cd /path/to/letsmcp
+PORT=3002 pm2 start npm --name "letsmcp" -- run dev
+
+# Save for auto-restart
+pm2 save
+pm2 startup
 ```
 
-This confirms that both `echoText` and `summarizeDirectory` tools are properly set up.
+### Cloud Platforms
 
-### Full Integration Testing
-
-For complete testing with a real MCP client:
-
-1. **Claude Desktop**: Configure in `claude_desktop_config.json` (see above)
-2. **MCP Inspector**: `npx @modelcontextprotocol/inspector node dist/index.js`
-   - Note: Inspector may have issues with stdio transport; use Claude Desktop for best results
-
-### Manual Testing
-
-Test the tools by asking Claude Desktop:
-- "Can you echo 'Hello, World!' for me?"
-- "Can you summarize the contents of C:\\Users\\shane\\Downloads?"
-
-
-## Extending the Server
-
-### Adding a New Tool
-
-```typescript
-server.setRequestHandler('tools/list', async () => {
-  return {
-    tools: [
-      // ... existing tools
-      {
-        name: 'your-tool',
-        description: 'Your tool description',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            // your parameters
-          },
-        },
-      },
-    ],
-  };
-});
-
-server.setRequestHandler('tools/call', async (request) => {
-  if (request.params.name === 'your-tool') {
-    // Your tool implementation
-  }
-  // ... existing tools
-});
-```
-
-### Adding a New Resource
-
-```typescript
-server.setRequestHandler('resources/list', async () => {
-  return {
-    resources: [
-      // ... existing resources
-      {
-        uri: 'your://resource',
-        name: 'Your Resource',
-        description: 'Your resource description',
-        mimeType: 'text/plain',
-      },
-    ],
-  };
-});
-
-server.setRequestHandler('resources/read', async (request) => {
-  if (request.params.uri === 'your://resource') {
-    // Your resource implementation
-  }
-  // ... existing resources
-});
-```
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for deployment guides for:
+- Railway
+- Render
+- Fly.io
+- Docker
 
 ## Troubleshooting
 
-### Server won't start
-- Check if port 3000 is already in use
-- Try a different port: `PORT=3001 npm run dev`
+### No AI providers showing
+- Check your `.env` file has valid API keys
+- Restart the server after changing `.env`: `pm2 restart letsmcp --update-env`
 
-### Can't connect from Claude/Antigravity
-- Verify server is running: `curl http://localhost:3000/health`
-- Check firewall settings
-- For remote deployment, ensure `HOST=0.0.0.0`
+### LinkedIn scraping fails
+- LinkedIn may require authentication for some job pages
+- Try using the job description text directly instead of URL
 
-### TypeScript errors
-- Run `npm run typecheck` to see detailed errors
-- Ensure all dependencies are installed: `npm install`
+### CORS errors from browser
+- The server has CORS enabled for all origins in development
+- For production, configure allowed origins in `src/index.ts`
 
-## Resources
-
-- [MCP Documentation](https://modelcontextprotocol.io)
-- [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
-- [MCP Specification](https://spec.modelcontextprotocol.io)
+### Port already in use
+- Change the port in `.env`: `PORT=3003`
+- Or kill the existing process: `fuser -k 3002/tcp`
 
 ## Author
 
-**shanebe-ai** (shanebe@live.com)
+**shanebe-ai** (shanbe@live.com)
 
 ## License
 
