@@ -7,7 +7,10 @@ import type { Request, Response, Router } from 'express';
 import { Router as createRouter } from 'express';
 import { getAIService, configureAIService } from '../ai/service.js';
 import type { AIServiceConfig, EmailDraftContext } from '../ai/types.js';
-import { chromium } from 'playwright';
+import { chromium } from 'playwright-extra';
+import stealth from 'puppeteer-extra-plugin-stealth';
+
+chromium.use(stealth());
 
 export function createAPIRoutes(): Router {
     const router = createRouter();
@@ -102,25 +105,37 @@ export function createAPIRoutes(): Router {
             // If URL provided, try to scrape it first
             if (url) {
                 if (url.includes('linkedin.com/jobs')) {
-                    // Use LinkedIn scraper
-                    const scraped = await scrapeLinkedInJob(url);
-                    if (scraped.title) {
-                        // Return scraped data directly if successful
-                        res.json({
-                            success: true,
-                            data: {
-                                title: scraped.title,
-                                company: scraped.company,
-                                location: scraped.location,
-                                description: scraped.description,
-                                source: 'LinkedIn',
-                            },
-                            provider: 'linkedin-scraper',
+                    // Try LinkedIn scraper, but gracefully fall back on failure
+                    try {
+                        const scraped = await scrapeLinkedInJob(url);
+                        if (scraped.title) {
+                            // Return scraped data directly if successful
+                            res.json({
+                                success: true,
+                                data: {
+                                    title: scraped.title,
+                                    company: scraped.company,
+                                    location: scraped.location,
+                                    description: scraped.description,
+                                    source: 'LinkedIn',
+                                },
+                                provider: 'linkedin-scraper',
+                            });
+                            return;
+                        }
+                        // Fall back to AI extraction with scraped description
+                        contentToAnalyze = scraped.description || url;
+                    } catch (scrapeError) {
+                        console.warn('LinkedIn scraper failed:', scrapeError);
+                        // LinkedIn requires login - return helpful error
+                        res.status(400).json({
+                            success: false,
+                            error: 'LinkedIn requires login to view job details. Please copy and paste the full job description text instead of the URL.',
+                            hint: 'Copy the job description from the LinkedIn page and paste it directly.',
+                            url: url,
                         });
                         return;
                     }
-                    // Fall back to AI extraction with scraped description
-                    contentToAnalyze = scraped.description || url;
                 } else {
                     // For other URLs, fetch content
                     try {
@@ -271,11 +286,37 @@ async function scrapeLinkedInJob(
 }> {
     let browser;
     try {
-        browser = await chromium.launch({ headless: true });
+        // Extract job ID from various URL formats and normalize to view URL
+        let normalizedUrl = url;
+        const jobIdMatch = url.match(/(?:currentJobId=|\/view\/)(\d+)/);
+        if (jobIdMatch) {
+            normalizedUrl = `https://www.linkedin.com/jobs/view/${jobIdMatch[1]}`;
+        }
+
+        browser = await chromium.launch({
+            headless: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--single-process',
+            ],
+        });
         const page = await browser.newPage();
 
-        await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
-        await page.waitForSelector('.top-card-layout__title, .job-details-jobs-unified-top-card__job-title', { timeout: 10000 });
+        // Set a realistic user agent
+        await page.setExtraHTTPHeaders({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        });
+
+        await page.goto(normalizedUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+        // Wait a bit for JS to render
+        await page.waitForTimeout(2000);
+
+        // Wait for any job title selector (multiple possible layouts)
+        await page.waitForSelector('.top-card-layout__title, .job-details-jobs-unified-top-card__job-title, h1.t-24, h2.t-24, .jobs-unified-top-card__job-title', { timeout: 15000 });
 
         const jobData = await page.evaluate((includeDesc) => {
             const getText = (selector: string): string => {
@@ -284,12 +325,13 @@ async function scrapeLinkedInJob(
                 return el?.textContent?.trim() || '';
             };
 
+            // Try multiple selectors for each field
             return {
-                title: getText('.top-card-layout__title, .job-details-jobs-unified-top-card__job-title'),
-                company: getText('.top-card-layout__first-subline, .job-details-jobs-unified-top-card__company-name'),
-                location: getText('.top-card-layout__second-subline, .job-details-jobs-unified-top-card__bullet'),
-                description: includeDesc ? getText('.show-more-less-html__markup, .jobs-description__content') : '',
-                postedDate: getText('.posted-time-ago__text, .job-details-jobs-unified-top-card__posted-date'),
+                title: getText('.top-card-layout__title') || getText('.job-details-jobs-unified-top-card__job-title') || getText('.jobs-unified-top-card__job-title') || getText('h1.t-24') || getText('h2.t-24'),
+                company: getText('.top-card-layout__first-subline a') || getText('.job-details-jobs-unified-top-card__company-name') || getText('.jobs-unified-top-card__company-name') || getText('.topcard__org-name-link'),
+                location: getText('.top-card-layout__second-subline span') || getText('.job-details-jobs-unified-top-card__bullet') || getText('.jobs-unified-top-card__bullet') || getText('.topcard__flavor--bullet'),
+                description: includeDesc ? (getText('.show-more-less-html__markup') || getText('.jobs-description__content') || getText('.description__text')) : '',
+                postedDate: getText('.posted-time-ago__text') || getText('.job-details-jobs-unified-top-card__posted-date') || getText('.jobs-unified-top-card__posted-date'),
             };
         }, includeDescription);
 
