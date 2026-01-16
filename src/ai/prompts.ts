@@ -67,9 +67,12 @@ Intent: ${context.intent} - ${intentGuide[context.intent as keyof typeof intentG
 ${context.jobDescription ? `\nJob Description:\n${context.jobDescription}` : ''}
 ${context.userBackground ? `\nSender Background:\n${context.userBackground}` : ''}
 
-Generate a concise, compelling email. Return as JSON with:
+Generate a concise, compelling email.
+Format the 'body' with clear paragraph breaks.
+IMPORTANT: Ensure newline characters are properly escaped for JSON (use \\n\\n). Do NOT use actual line breaks in the JSON string.
+Return as JSON with:
 - subject: email subject line
-- body: email body text
+- body: email body text (using \n\n for new paragraphs)
 - confidence: number 0-100 indicating how well this matches the request
 
 Return ONLY valid JSON, no markdown or explanation.`;

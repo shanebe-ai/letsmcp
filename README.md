@@ -17,7 +17,7 @@ A powerful [Model Context Protocol (MCP)](https://modelcontextprotocol.io) serve
 - ✅ **LinkedIn Scraping**: Browser-based job scraping with Playwright
 - ✅ **Job Extraction**: AI-powered extraction of job details from text/URLs
 - ✅ **Resume Analysis**: Compare resumes against job descriptions
-- ✅ **Email Drafting**: Generate professional outreach emails
+- ✅ **Email Drafting**: Generate professional outreach emails with strict formatting controls (JSON-safe).
 
 ### Infrastructure
 - ✅ **TypeScript**: Full type safety with the official MCP SDK
