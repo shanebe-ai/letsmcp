@@ -227,6 +227,90 @@ Response:
 **Intent options**: `Connect`, `FollowUp`, `ReferralRequest`, `PeerOutreach`
 **Tone options**: `Formal`, `Casual`, `Enthusiastic`, `Professional`
 
+### Job Queue Management
+
+#### `POST /api/jobs`
+Save a job to the queue (used by Chrome extension).
+
+```bash
+curl -X POST http://localhost:3002/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Senior Engineer",
+    "company": "TechCorp",
+    "location": "San Francisco, CA",
+    "workType": "Remote",
+    "description": "<p>Job description...</p>",
+    "url": "https://linkedin.com/jobs/view/123"
+  }'
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Job saved to queue"
+}
+```
+
+#### `GET /api/jobs`
+Retrieve all queued jobs.
+
+```bash
+curl http://localhost:3002/api/jobs
+```
+
+Response:
+```json
+{
+  "success": true,
+  "count": 5,
+  "data": [
+    {
+      "id": "job_1768634456345_0",
+      "title": "Senior Engineer",
+      "company": "TechCorp",
+      "location": "San Francisco, CA",
+      "workType": "Remote",
+      "description": "<p>Job description...</p>",
+      "url": "https://linkedin.com/jobs/view/123",
+      "scrapedAt": "2026-01-17T04:14:07.702Z",
+      "source": "visual-fallback"
+    }
+  ]
+}
+```
+
+#### `DELETE /api/jobs/:id`
+Delete a specific job from the queue.
+
+```bash
+curl -X DELETE http://localhost:3002/api/jobs/job_1768634456345_0
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Job deleted"
+}
+```
+
+#### `DELETE /api/jobs`
+Clear all jobs from the queue.
+
+```bash
+curl -X DELETE http://localhost:3002/api/jobs
+```
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Job queue cleared"
+}
+```
+
 ## MCP Tools
 
 ### Core Tools

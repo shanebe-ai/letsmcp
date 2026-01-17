@@ -11,6 +11,10 @@ import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
 
 chromium.use(stealth());
+import fs from 'fs/promises';
+import path from 'path';
+
+const JOBS_FILE = path.join(process.cwd(), 'jobs.json');
 
 export function createAPIRoutes(): Router {
     const router = createRouter();
@@ -261,6 +265,109 @@ export function createAPIRoutes(): Router {
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             res.status(500).json({ error: message });
+        }
+    });
+
+    /**
+     * POST /api/jobs
+     * Receive job from extension and save to queue
+     */
+    router.post('/jobs', async (req: Request, res: Response) => {
+        try {
+            const jobData = req.body;
+            if (!jobData || !jobData.title) {
+                res.status(400).json({ error: 'Invalid job data' });
+                return;
+            }
+
+            let jobs = [];
+            try {
+                const data = await fs.readFile(JOBS_FILE, 'utf-8');
+                jobs = JSON.parse(data);
+            } catch (e) {
+                // File doesn't exist or invalid, start fresh
+                jobs = [];
+            }
+
+            // Check for duplicate (by URL or Title+Company)
+            const exists = jobs.some((j: any) => {
+                if (j.url && jobData.url && j.url === jobData.url) return true;
+                if (j.title === jobData.title && j.company === jobData.company) return true;
+                return false;
+            });
+
+            if (exists) {
+                res.json({ success: true, message: 'Job already queued', isDuplicate: true });
+                return;
+            }
+
+            // Generate ID if not present
+            if (!jobData.id) {
+                jobData.id = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            }
+
+            jobs.push(jobData);
+            await fs.writeFile(JOBS_FILE, JSON.stringify(jobs, null, 2));
+
+            res.json({ success: true, message: 'Job saved to queue' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            res.status(500).json({ error: message });
+        }
+    });
+
+    /**
+     * GET /api/jobs
+     * Retrieve queued jobs
+     */
+    router.get('/jobs', async (_req: Request, res: Response) => {
+        try {
+            let jobs = [];
+            try {
+                const data = await fs.readFile(JOBS_FILE, 'utf-8');
+                jobs = JSON.parse(data);
+            } catch {
+                jobs = [];
+            }
+            res.json({ success: true, count: jobs.length, data: jobs });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to read jobs' });
+        }
+    });
+
+    /**
+     * DELETE /api/jobs/:id
+     * Delete a specific job from the queue
+     */
+    router.delete('/jobs/:id', async (req: Request, res: Response) => {
+        try {
+            const { id } = req.params;
+            let jobs = [];
+            try {
+                const data = await fs.readFile(JOBS_FILE, 'utf-8');
+                jobs = JSON.parse(data);
+            } catch {
+                jobs = [];
+            }
+
+            const filteredJobs = jobs.filter((j: any) => j.id !== id);
+            await fs.writeFile(JOBS_FILE, JSON.stringify(filteredJobs, null, 2));
+            res.json({ success: true, message: 'Job deleted' });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to delete job' });
+        }
+    });
+
+    /**
+     * DELETE /api/jobs
+     * Clear job queue
+     */
+    router.delete('/jobs', async (_req: Request, res: Response) => {
+        try {
+            await fs.writeFile(JOBS_FILE, '[]');
+            res.json({ success: true, message: 'Job queue cleared' });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to clear jobs' });
         }
     });
 
