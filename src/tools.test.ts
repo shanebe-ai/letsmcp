@@ -472,11 +472,14 @@ describe('MCP Tools', () => {
         });
 
         it('should return exit code for failed commands', async () => {
-            // This test is platform-dependent
-            // On Windows, we'll use a command that fails
-            const result = await callTool('executeCommand', {
+            // Use a cross-platform approach: bash on Linux/Mac, cmd on Windows
+            const isWindows = process.platform === 'win32';
+            const result = await callTool('executeCommand', isWindows ? {
                 command: 'cmd',
                 args: ['/c', 'exit 1']
+            } : {
+                command: 'bash',
+                args: ['-c', 'exit 1']
             });
 
             expect(result.isError).toBeUndefined();
