@@ -3,7 +3,7 @@
  * Manages multiple AI providers with automatic fallback
  */
 
-import type { AIProvider, AIServiceConfig, JobDetails, ResumeAnalysis, EmailDraftContext, EmailDraft, CompanyResearch, ParsedJobDescription } from './types.js';
+import type { AIProvider, AIServiceConfig, JobDetails, ResumeAnalysis, EmailDraftContext, EmailDraft, CompanyResearch, ParsedJobDescription, ParsedProfile } from './types.js';
 import { GroqProvider, ClaudeProvider, GeminiProvider } from './providers/index.js';
 
 export class AIService {
@@ -178,6 +178,17 @@ export class AIService {
     ): Promise<{ data: ParsedJobDescription; provider: string }> {
         const { result, provider } = await this.executeWithFallback(
             (p) => p.parseJobDescription(text),
+            preferredProvider
+        );
+        return { data: result, provider };
+    }
+
+    async parseProfile(
+        rawText: string,
+        preferredProvider?: string
+    ): Promise<{ data: ParsedProfile; provider: string }> {
+        const { result, provider } = await this.executeWithFallback(
+            (p) => p.parseProfile(rawText),
             preferredProvider
         );
         return { data: result, provider };

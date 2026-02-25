@@ -3,7 +3,7 @@
  * Fast inference with Llama models
  */
 
-import type { AIProvider, JobDetails, ResumeAnalysis, EmailDraftContext, EmailDraft, CompanyResearch, ParsedJobDescription } from '../types.js';
+import type { AIProvider, JobDetails, ResumeAnalysis, EmailDraftContext, EmailDraft, CompanyResearch, ParsedJobDescription, ParsedProfile } from '../types.js';
 import { PROMPTS, parseAIJson } from '../prompts.js';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -145,6 +145,16 @@ export class GroqProvider implements AIProvider {
                 companyCulture: [],
                 compensationHints: ''
             };
+        }
+    }
+
+    async parseProfile(rawText: string): Promise<ParsedProfile> {
+        const prompt = PROMPTS.parseProfile(rawText);
+        const response = await this.callAPI(prompt);
+        try {
+            return parseAIJson<ParsedProfile>(response);
+        } catch {
+            return { name: '', headline: '', summary: '', skills: [], location: '' };
         }
     }
 }

@@ -111,6 +111,20 @@ Return a JSON object with:
 
 Return ONLY valid JSON, no markdown or explanation.`,
 
+    parseProfile: (rawText: string) => `Extract structured professional profile information from the following LinkedIn profile or resume text.
+
+Profile Text:
+${rawText.slice(0, 4000)}
+
+Return a JSON object with:
+- name: full name of the person
+- headline: professional headline or current job title (e.g. "Senior Product Manager at Google")
+- summary: professional bio or about section (keep it as written, up to 500 chars)
+- skills: array of up to 15 top professional skills mentioned
+- location: city/region if mentioned
+
+Return ONLY valid JSON, no markdown or explanation.`,
+
     generateText: (prompt: string) => prompt
 };
 
