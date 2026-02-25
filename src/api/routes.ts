@@ -15,6 +15,7 @@ import fs from 'fs/promises';
 import path from 'path';
 
 const JOBS_FILE = path.join(process.cwd(), 'jobs.json');
+const RESUME_FILE = path.join(process.cwd(), 'resume.txt');
 
 export function createAPIRoutes(): Router {
     const router = createRouter();
@@ -257,6 +258,133 @@ export function createAPIRoutes(): Router {
             }
 
             const result = await service.draftEmail(context, context.provider);
+            res.json({
+                success: true,
+                data: result.data,
+                provider: result.provider,
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            res.status(500).json({ error: message });
+        }
+    });
+
+    /**
+     * GET /api/resume
+     * Retrieve stored master resume text
+     */
+    router.get('/resume', async (_req: Request, res: Response) => {
+        try {
+            let text = '';
+            try {
+                text = await fs.readFile(RESUME_FILE, 'utf-8');
+            } catch {
+                // File doesn't exist yet
+            }
+            res.json({ success: true, text, hasResume: text.length > 0 });
+        } catch (error) {
+            res.status(500).json({ error: 'Failed to read resume' });
+        }
+    });
+
+    /**
+     * POST /api/resume
+     * Save master resume text
+     */
+    router.post('/resume', async (req: Request, res: Response) => {
+        try {
+            const { text } = req.body as { text: string };
+            if (typeof text !== 'string') {
+                res.status(400).json({ error: 'text (string) is required' });
+                return;
+            }
+            await fs.writeFile(RESUME_FILE, text, 'utf-8');
+            res.json({ success: true, message: 'Resume saved', length: text.length });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            res.status(500).json({ error: message });
+        }
+    });
+
+    /**
+     * POST /api/research
+     * Research a company using AI (with optional web fetch for their URL)
+     */
+    router.post('/research', async (req: Request, res: Response) => {
+        try {
+            const { companyName, url, provider } = req.body as {
+                companyName: string;
+                url?: string;
+                provider?: string;
+            };
+
+            if (!companyName) {
+                res.status(400).json({ error: 'companyName is required' });
+                return;
+            }
+
+            const service = getAIService();
+            if (!service.hasProvider()) {
+                res.status(503).json({ error: 'No AI providers configured' });
+                return;
+            }
+
+            // Try to fetch company website content if URL provided
+            let pageContent: string | undefined;
+            if (url) {
+                try {
+                    const fetchRes = await fetch(url, {
+                        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; JobResearcher/1.0)' },
+                        signal: AbortSignal.timeout(8000),
+                    });
+                    if (fetchRes.ok) {
+                        const html = await fetchRes.text();
+                        // Strip HTML tags for cleaner AI input
+                        pageContent = html
+                            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                            .replace(/<[^>]+>/g, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                    }
+                } catch {
+                    // Continue without page content
+                }
+            }
+
+            const result = await service.researchCompany(companyName, pageContent, provider);
+            res.json({
+                success: true,
+                data: result.data,
+                provider: result.provider,
+                fetchedUrl: url && pageContent ? url : null,
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            res.status(500).json({ error: message });
+        }
+    });
+
+    /**
+     * POST /api/parse-jd
+     * Parse a job description into structured skill/requirement data
+     */
+    router.post('/parse-jd', async (req: Request, res: Response) => {
+        try {
+            const { description, provider } = req.body as { description: string; provider?: string };
+
+            if (!description) {
+                res.status(400).json({ error: 'description is required' });
+                return;
+            }
+
+            const service = getAIService();
+            if (!service.hasProvider()) {
+                res.status(503).json({ error: 'No AI providers configured' });
+                return;
+            }
+
+            const result = await service.parseJobDescription(description, provider);
             res.json({
                 success: true,
                 data: result.data,

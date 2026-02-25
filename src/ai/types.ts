@@ -8,6 +8,8 @@ export interface AIProvider {
     extractJobDetails(text: string): Promise<JobDetails>;
     analyzeResume(jobDescription: string, resumeText: string): Promise<ResumeAnalysis>;
     draftEmail(context: EmailDraftContext): Promise<EmailDraft>;
+    researchCompany(companyName: string, pageContent?: string): Promise<CompanyResearch>;
+    parseJobDescription(text: string): Promise<ParsedJobDescription>;
     isConfigured(): boolean;
 }
 
@@ -47,6 +49,30 @@ export interface EmailDraft {
     subject: string;
     body: string;
     confidence: number;
+}
+
+export interface CompanyResearch {
+    name: string;
+    mission: string;
+    size: string;
+    industry: string;
+    techStack: string[];
+    culture: string[];
+    recentNews: string[];
+    funding: string;
+    competitors: string[];
+    whyJoin: string[];
+}
+
+export interface ParsedJobDescription {
+    requiredSkills: string[];
+    niceToHaveSkills: string[];
+    experienceLevel: string;
+    responsibilities: string[];
+    techStack: string[];
+    redFlags: string[];
+    companyCulture: string[];
+    compensationHints: string;
 }
 
 export interface AIServiceConfig {

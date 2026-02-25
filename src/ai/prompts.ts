@@ -78,6 +78,39 @@ Return as JSON with:
 Return ONLY valid JSON, no markdown or explanation.`;
     },
 
+    researchCompany: (companyName: string, pageContent?: string) => `Research the company "${companyName}" and provide structured information.
+${pageContent ? `\nUse this content from their website to inform your research:\n${pageContent.slice(0, 3000)}\n` : ''}
+Return a JSON object with:
+- name: company name
+- mission: their core mission or purpose (1-2 sentences)
+- size: company size estimate (e.g. "50-200 employees", "Series B startup", "Fortune 500")
+- industry: primary industry/sector
+- techStack: array of known technologies, tools, or platforms they use
+- culture: array of key cultural values or work environment traits
+- recentNews: array of notable recent events (funding, product launches, expansions) - up to 3 items
+- funding: funding stage or public status (e.g. "Series C", "Bootstrapped", "Public - NYSE: XYZ")
+- competitors: array of main competitors (up to 4)
+- whyJoin: array of compelling reasons to join this company (up to 3)
+
+Return ONLY valid JSON, no markdown or explanation.`,
+
+    parseJobDescription: (text: string) => `Analyze this job description and extract structured information for a job seeker.
+
+Job Description:
+${text}
+
+Return a JSON object with:
+- requiredSkills: array of must-have technical skills, tools, or qualifications explicitly required
+- niceToHaveSkills: array of preferred/bonus skills (marked as "nice to have", "preferred", "plus", etc.)
+- experienceLevel: inferred level - one of: "Entry-level", "Mid-level", "Senior", "Staff/Principal", "Manager", "Director/VP"
+- responsibilities: array of the top 5 core responsibilities or day-to-day tasks
+- techStack: array of specific technologies, frameworks, or platforms mentioned
+- redFlags: array of any concerning signals (e.g. "10+ years for junior role", "work-life balance concerns", vague equity, unpaid overtime hints)
+- companyCulture: array of cultural indicators mentioned (e.g. "fast-paced", "remote-first", "collaborative")
+- compensationHints: any salary, equity, or benefits info mentioned (empty string if none)
+
+Return ONLY valid JSON, no markdown or explanation.`,
+
     generateText: (prompt: string) => prompt
 };
 

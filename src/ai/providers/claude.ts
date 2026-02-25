@@ -2,7 +2,7 @@
  * Claude AI Provider (Anthropic)
  */
 
-import type { AIProvider, JobDetails, ResumeAnalysis, EmailDraftContext, EmailDraft } from '../types.js';
+import type { AIProvider, JobDetails, ResumeAnalysis, EmailDraftContext, EmailDraft, CompanyResearch, ParsedJobDescription } from '../types.js';
 import { PROMPTS, parseAIJson } from '../prompts.js';
 
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
@@ -99,6 +99,48 @@ export class ClaudeProvider implements AIProvider {
                 subject: `Reaching out about ${context.jobTitle}`,
                 body: 'Unable to generate email draft.',
                 confidence: 0
+            };
+        }
+    }
+
+    async researchCompany(companyName: string, pageContent?: string): Promise<CompanyResearch> {
+        const prompt = PROMPTS.researchCompany(companyName, pageContent);
+        const response = await this.callAPI(prompt);
+
+        try {
+            return parseAIJson<CompanyResearch>(response);
+        } catch {
+            return {
+                name: companyName,
+                mission: '',
+                size: '',
+                industry: '',
+                techStack: [],
+                culture: [],
+                recentNews: [],
+                funding: '',
+                competitors: [],
+                whyJoin: []
+            };
+        }
+    }
+
+    async parseJobDescription(text: string): Promise<ParsedJobDescription> {
+        const prompt = PROMPTS.parseJobDescription(text);
+        const response = await this.callAPI(prompt);
+
+        try {
+            return parseAIJson<ParsedJobDescription>(response);
+        } catch {
+            return {
+                requiredSkills: [],
+                niceToHaveSkills: [],
+                experienceLevel: 'Mid-level',
+                responsibilities: [],
+                techStack: [],
+                redFlags: [],
+                companyCulture: [],
+                compensationHints: ''
             };
         }
     }
