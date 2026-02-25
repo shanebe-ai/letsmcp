@@ -10,6 +10,7 @@ export interface AIProvider {
     draftEmail(context: EmailDraftContext): Promise<EmailDraft>;
     researchCompany(companyName: string, pageContent?: string): Promise<CompanyResearch>;
     parseJobDescription(text: string): Promise<ParsedJobDescription>;
+    parseProfile(rawText: string): Promise<ParsedProfile>;
     isConfigured(): boolean;
 }
 
@@ -73,6 +74,14 @@ export interface ParsedJobDescription {
     redFlags: string[];
     companyCulture: string[];
     compensationHints: string;
+}
+
+export interface ParsedProfile {
+    name: string;
+    headline: string;
+    summary: string;
+    skills: string[];
+    location: string;
 }
 
 export interface AIServiceConfig {

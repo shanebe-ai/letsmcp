@@ -16,6 +16,7 @@ import path from 'path';
 
 const JOBS_FILE = path.join(process.cwd(), 'jobs.json');
 const RESUME_FILE = path.join(process.cwd(), 'resume.txt');
+const PROFILE_FILE = path.join(process.cwd(), 'profile.json');
 
 export function createAPIRoutes(): Router {
     const router = createRouter();
@@ -390,6 +391,46 @@ export function createAPIRoutes(): Router {
                 data: result.data,
                 provider: result.provider,
             });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            res.status(500).json({ error: message });
+        }
+    });
+
+    /**
+     * GET /api/profile
+     * Return the stored LinkedIn profile (if any)
+     */
+    router.get('/profile', async (req: Request, res: Response) => {
+        try {
+            const data = await fs.readFile(PROFILE_FILE, 'utf-8');
+            res.json({ success: true, profile: JSON.parse(data) });
+        } catch {
+            res.json({ success: false, profile: null });
+        }
+    });
+
+    /**
+     * POST /api/profile
+     * Receive raw profile text from extension, AI-parse it, and store
+     */
+    router.post('/profile', async (req: Request, res: Response) => {
+        try {
+            const { rawText, provider } = req.body as { rawText: string; provider?: string };
+            if (!rawText) {
+                res.status(400).json({ error: 'rawText is required' });
+                return;
+            }
+
+            const service = getAIService();
+            if (!service.hasProvider()) {
+                res.status(503).json({ error: 'No AI providers configured' });
+                return;
+            }
+
+            const result = await service.parseProfile(rawText, provider);
+            await fs.writeFile(PROFILE_FILE, JSON.stringify(result.data, null, 2), 'utf-8');
+            res.json({ success: true, profile: result.data, provider: result.provider });
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             res.status(500).json({ error: message });
