@@ -3,8 +3,8 @@
 **Project**: letsmcp - Minimal MCP Server  
 **Author**: shanebe-ai (shanebe@live.com)  
 **Repository**: https://github.com/shanebe-ai/letsmcp  
-**Status**: ✅ v2.0.0 - Production Ready with Essential Tools  
-**Last Updated**: 2026-01-14
+**Status**: ✅ v2.1.0 - Production Ready with JobOS Integration
+**Last Updated**: 2026-02-25
 
 ---
 
@@ -28,6 +28,12 @@
 - [x] `executeCommand` - Execute shell commands with timeout
 - [x] `webFetch` - Fetch and parse web content
 - [x] `scrapeLinkedInJob` - Scrape LinkedIn job postings with browser automation
+
+#### REST API Endpoints (JobOS Integration)
+- [x] `POST /api/jobs` - Add jobs from Chrome extension with auto ID generation
+- [x] `GET /api/jobs` - Retrieve job queue
+- [x] `DELETE /api/jobs/:id` - Remove job from queue
+- [x] AI-powered endpoints for Magic Paste, Resume Analysis, Email Drafting
 
 #### Resources
 - [x] `server://info` - Server metadata and capabilities
@@ -112,6 +118,14 @@
 ---
 
 ## Version History
+
+### v2.1.0 (2026-02-25)
+**JobOS Integration Release**
+- Added REST API endpoints for JobOS Chrome extension integration
+- Added job queue management (`POST/GET/DELETE /api/jobs`)
+- Added auto ID generation for incoming jobs
+- Hardened email prompts for JSON safety
+- Added error logging improvements
 
 ### v2.0.0 (2026-01-14)
 **Major Release: Essential Tools**
