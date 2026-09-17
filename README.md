@@ -1,6 +1,34 @@
 # LetsMCP - AI-Powered MCP Server
 
-A powerful [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server with integrated AI capabilities. Supports multiple AI providers (Groq, Claude, Gemini) with automatic fallback, LinkedIn job scraping, and a REST API for external application integration.
+A TypeScript [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server with integrated AI capabilities. Supports multiple AI providers (Groq, Claude, Gemini) with automatic fallback, LinkedIn job scraping, and a REST API for external application integration.
+
+## Why it exists
+
+LetsMCP gives MCP clients and web applications a shared service boundary for AI generation, structured job extraction, resume analysis, and optional browser-based workflows.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  C[MCP clients] --> S[LetsMCP service]
+  R[REST clients / JobOS] --> S
+  S --> V[Zod validation]
+  V --> O[Provider adapter and fallback]
+  O --> G[Groq]
+  O --> A[Anthropic]
+  O --> M[Gemini]
+  S --> Q[Job persistence]
+  S --> P[Playwright browser automation]
+```
+
+## Trust boundaries
+
+- Run command execution and file operations only in a trusted environment with least-privilege access.
+- Do not expose configuration endpoints publicly without authentication and authorization.
+- Keep provider keys in environment variables or a secret manager; never commit `.env` files.
+- Treat third-party content returned through browser automation as untrusted.
+- Add request limits, rate limits, timeouts, audit logging, and retention rules before shared hosting.
+- Provider fallback can change cost, latency, and model behavior; log the selected provider and surface failures.
 
 ## Features
 
@@ -22,7 +50,7 @@ A powerful [Model Context Protocol (MCP)](https://modelcontextprotocol.io) serve
 ### Infrastructure
 - ✅ **TypeScript**: Full type safety with the official MCP SDK
 - ✅ **Comprehensive Tests**: Unit tests with Vitest
-- ✅ **Production Ready**: Error handling, validation, and security measures
+- ✅ **Deployment options**: Error handling, validation, and self-hosting configurations
 - ✅ **Deployment Ready**: Railway, Render, Fly.io support
 
 ## Quick Start
