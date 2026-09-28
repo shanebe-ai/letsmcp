@@ -38,7 +38,7 @@ flowchart LR
 - ✅ **8 MCP Tools**: File operations, command execution, web scraping, and more
 - ✅ **One Resource**: `server://info` - provides server metadata
 
-### AI Integration (NEW)
+### AI Integration
 - ✅ **Multi-Provider AI**: Groq (Llama 3.1), Claude (Anthropic), and Google Gemini
 - ✅ **Automatic Fallback**: If one provider fails, automatically tries the next
 - ✅ **REST API**: HTTP endpoints for external applications (like JobOS)
