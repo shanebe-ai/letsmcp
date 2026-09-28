@@ -49,6 +49,12 @@ export function createAPIRoutes(): Router {
      * Update AI provider configuration at runtime
      */
     router.post('/config', (req: Request, res: Response) => {
+        // Runtime reconfiguration is disabled in production: this endpoint
+        // accepts provider credentials, so it must never be exposed publicly.
+        if (process.env.NODE_ENV === 'production') {
+            res.status(403).json({ error: 'Runtime configuration is disabled in production' });
+            return;
+        }
         try {
             const config = req.body as AIServiceConfig;
             const service = configureAIService(config);
