@@ -1,4 +1,4 @@
-# LetsMCP - AI-Powered MCP Server
+# LetsMCP: AI-Powered MCP Server
 
 A TypeScript [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server with integrated AI capabilities. Supports multiple AI providers (Groq, Claude, Gemini) with automatic fallback, LinkedIn job scraping, and a REST API for external application integration.
 
