@@ -36,7 +36,7 @@ flowchart LR
 - ✅ **Stdio Transport**: Standard MCP transport for Claude Desktop, Cursor, and Antigravity
 - ✅ **HTTP Health Endpoint**: Monitor server status at `/health`
 - ✅ **8 MCP Tools**: File operations, command execution, web scraping, and more
-- ✅ **One Resource**: `server://info` - provides server metadata
+- ✅ **One Resource**: `server://info` (provides server metadata)
 
 ### AI Integration
 - ✅ **Multi-Provider AI**: Groq (Llama 3.1), Claude (Anthropic), and Google Gemini
