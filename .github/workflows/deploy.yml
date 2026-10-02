@@ -21,6 +21,7 @@ jobs:
             git reset --hard origin/main
             npm ci
             npm run build
-            pm2 restart letsmcp
+            export NODE_ENV=production PORT=3002
+            pm2 restart letsmcp --update-env
             sleep 5
             curl -sf http://localhost:3002/health
