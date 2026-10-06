@@ -97,7 +97,8 @@ export class GroqProvider implements AIProvider {
             return parseAIJson<EmailDraft>(response);
         } catch (e) {
             console.error('Groq JSON Parse Error:', e);
-            console.error('Raw Response:', response);
+            // Log a truncated snippet, never the full upstream body.
+            console.error('Raw Response (first 500 chars):', response.slice(0, 500));
             return {
                 subject: `Reaching out about ${context.jobTitle}`,
                 body: 'Unable to generate email draft.',

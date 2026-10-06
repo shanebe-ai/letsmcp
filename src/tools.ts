@@ -6,9 +6,9 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { spawn } from 'child_process';
-import fetch from 'node-fetch';
 import * as cheerio from 'cheerio';
 import { chromium } from 'playwright';
+import { isLinkedInJobUrl, safeFetch } from './security/ssrf.js';
 
 /**
  * Type definitions for tool inputs
@@ -113,7 +113,7 @@ function validateWebFetchInput(args: unknown): args is WebFetchInput {
 
 function validateScrapeLinkedInJobInput(args: unknown): args is ScrapeLinkedInJobInput {
     const input = args as Record<string, unknown>;
-    return typeof input.url === 'string' && input.url.includes('linkedin.com/jobs');
+    return typeof input.url === 'string' && isLinkedInJobUrl(input.url);
 }
 
 /**
@@ -855,11 +855,14 @@ export function registerTools(server: Server) {
                         };
                     }
 
-                    // Fetch content
+                    // Fetch content with SSRF protection: the URL comes from the
+                    // model, so the destination is validated, redirects are
+                    // followed manually with per-hop revalidation, and the
+                    // validated IP is pinned at connect time.
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-                    const response = await fetch(input.url, {
+                    const response = await safeFetch(input.url, {
                         signal: controller.signal,
                     });
 

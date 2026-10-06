@@ -7,6 +7,7 @@ import type { Request, Response, Router } from 'express';
 import { Router as createRouter } from 'express';
 import { getAIService, configureAIService } from '../ai/service.js';
 import type { AIServiceConfig, EmailDraftContext } from '../ai/types.js';
+import { assertSafeFetchTarget, isLinkedInJobUrl, safeFetchGlobal } from '../security/ssrf.js';
 import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
 
@@ -116,7 +117,7 @@ export function createAPIRoutes(): Router {
 
             // If URL provided, try to scrape it first
             if (url) {
-                if (url.includes('linkedin.com/jobs')) {
+                if (isLinkedInJobUrl(url)) {
                     // Try LinkedIn scraper, but gracefully fall back on failure
                     try {
                         const scraped = await scrapeLinkedInJob(url);
@@ -149,9 +150,9 @@ export function createAPIRoutes(): Router {
                         return;
                     }
                 } else {
-                    // For other URLs, fetch content
+                    // For other URLs, fetch content with SSRF protection.
                     try {
-                        const response = await fetch(url);
+                        const response = await safeFetchGlobal(url);
                         contentToAnalyze = await response.text();
                     } catch {
                         contentToAnalyze = url;
@@ -189,7 +190,7 @@ export function createAPIRoutes(): Router {
                 screenshot?: boolean;
             };
 
-            if (!url || !url.includes('linkedin.com/jobs')) {
+            if (!url || !isLinkedInJobUrl(url)) {
                 res.status(400).json({ error: 'Valid LinkedIn job URL is required' });
                 return;
             }
@@ -340,7 +341,7 @@ export function createAPIRoutes(): Router {
             let pageContent: string | undefined;
             if (url) {
                 try {
-                    const fetchRes = await fetch(url, {
+                    const fetchRes = await safeFetchGlobal(url, {
                         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; JobResearcher/1.0)' },
                         signal: AbortSignal.timeout(8000),
                     });
@@ -574,6 +575,10 @@ async function scrapeLinkedInJob(
         if (jobIdMatch) {
             normalizedUrl = `https://www.linkedin.com/jobs/view/${jobIdMatch[1]}`;
         }
+
+        // Defense in depth: the browser is a stronger SSRF client than fetch,
+        // so validate the destination even though callers already check it.
+        await assertSafeFetchTarget(normalizedUrl);
 
         browser = await chromium.launch({
             headless: true,
