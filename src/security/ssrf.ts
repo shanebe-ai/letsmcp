@@ -2,10 +2,13 @@
  * SSRF guard for outbound fetches.
  *
  * The model (or any API caller) supplies the URL, so the URL is untrusted
- * input. This module validates where a URL actually resolves before anything
- * connects to it, follows redirects manually so every hop is revalidated,
- * and pins the validated IP at connect time to stop DNS rebinding between
- * the check and the connection.
+ * input. This module resolves the destination exactly once per fetch, validates
+ * every resolved address before anything connects, follows redirects manually
+ * so every hop is revalidated, and pins the validated IP at connect time so a
+ * hostile DNS answer cannot swap the address between validation and
+ * connection (DNS rebinding). The single-resolution design is what makes the
+ * pinning sound: the pinned address always comes from the same DNS answer
+ * that passed validation.
  *
  * Blocked: loopback, RFC1918 private, link local (including the cloud
  * metadata addresses 169.254.169.254 and metadata.google.internal), CGNAT,
@@ -23,6 +26,7 @@
  */
 
 import dns from 'node:dns/promises';
+import type { LookupAddress } from 'node:dns';
 import http, { type AgentOptions } from 'node:http';
 import https from 'node:https';
 import net, { type LookupFunction } from 'node:net';
@@ -84,10 +88,21 @@ export function isNonPublicIp(ip: string): boolean {
 }
 
 /**
- * Validate the destination of a URL before connecting. Throws on any
- * violation. Returns the parsed URL when the destination is safe.
+ * A URL whose destination was resolved and validated. The addresses are the
+ * exact DNS answer that passed validation; pinning must use these records
+ * and never re-resolve, otherwise a hostile DNS can swap the address between
+ * the check and the connection (DNS rebinding).
  */
-export async function assertSafeFetchTarget(rawUrl: string): Promise<URL> {
+export interface ValidatedTarget {
+    url: URL;
+    addresses: LookupAddress[];
+}
+
+/**
+ * Resolve a URL's destination exactly once and validate it. Throws on any
+ * violation. Returns the parsed URL plus the validated DNS records.
+ */
+export async function resolveValidatedTarget(rawUrl: string): Promise<ValidatedTarget> {
     let url: URL;
     try {
         url = new URL(rawUrl);
@@ -111,13 +126,15 @@ export async function assertSafeFetchTarget(rawUrl: string): Promise<URL> {
         if (isNonPublicIp(hostname)) {
             throw new Error(`Blocked URL: IP literal is not publicly routable (${hostname})`);
         }
-        return url;
+        return {
+            url,
+            addresses: [{ address: hostname, family: net.isIPv4(hostname) ? 4 : 6 }],
+        };
     }
 
-    let addresses: string[];
+    let addresses: LookupAddress[];
     try {
-        const records = await dns.lookup(hostname, { all: true });
-        addresses = records.map((r) => r.address);
+        addresses = await dns.lookup(hostname, { all: true });
     } catch {
         // Fail closed: no DNS answer means no fetch.
         throw new Error(`Blocked URL: DNS lookup failed for ${hostname}`);
@@ -125,12 +142,20 @@ export async function assertSafeFetchTarget(rawUrl: string): Promise<URL> {
     if (addresses.length === 0) {
         throw new Error(`Blocked URL: no DNS records for ${hostname}`);
     }
-    for (const address of addresses) {
-        if (isNonPublicIp(address)) {
-            throw new Error(`Blocked URL: ${hostname} resolves to non-public IP (${address})`);
+    for (const record of addresses) {
+        if (isNonPublicIp(record.address)) {
+            throw new Error(`Blocked URL: ${hostname} resolves to non-public IP (${record.address})`);
         }
     }
-    return url;
+    return { url, addresses };
+}
+
+/**
+ * Validate the destination of a URL before connecting. Throws on any
+ * violation. Returns the parsed URL when the destination is safe.
+ */
+export async function assertSafeFetchTarget(rawUrl: string): Promise<URL> {
+    return (await resolveValidatedTarget(rawUrl)).url;
 }
 
 /**
@@ -155,15 +180,13 @@ export function isLinkedInJobUrl(rawUrl: string): boolean {
 type PinnedAgent = http.Agent | https.Agent;
 
 /**
- * Resolve the hostname and pin the validated IP at connect time, so a
- * hostile DNS answer cannot swap the address between validation and
- * connection (DNS rebinding).
+ * Build an agent that pins the validated IP at connect time. The addresses
+ * must come from the same DNS answer that passed validation (see
+ * resolveValidatedTarget); re-resolving here would reopen the DNS rebinding
+ * window this pinning exists to close.
  */
-async function pinnedAgent(url: URL): Promise<PinnedAgent> {
-    const hostname = url.hostname.replace(/^\[|\]$/g, '');
-    const records = await dns.lookup(hostname, { all: true });
-    const address = records[0].address;
-    const family = records[0].family;
+function pinnedAgent(url: URL, addresses: LookupAddress[]): PinnedAgent {
+    const { address, family } = addresses[0];
     // Node 20+ agents request lookup with { all: true } for Happy Eyeballs;
     // in that mode the callback must receive an address array.
     const lookup: LookupFunction = (_hostname, options, callback) => {
@@ -179,26 +202,21 @@ async function pinnedAgent(url: URL): Promise<PinnedAgent> {
         : new http.Agent(agentOptions);
 }
 
-async function nextHopUrl(current: string, location: string): Promise<URL> {
-    const next = new URL(location, current);
-    return assertSafeFetchTarget(next.toString());
-}
-
 /**
  * Fetch with SSRF protection, node-fetch edition (MCP tools).
- * Validates the initial URL, follows redirects manually with a hop cap,
- * revalidates every hop, and pins the validated IP at connect time.
+ * Resolves the destination once, validates it, follows redirects manually
+ * with a hop cap, revalidates every hop, and pins the validated IP at
+ * connect time.
  */
 export async function safeFetch(input: RequestInfo, init: RequestInit = {}): Promise<Response> {
-    let current = (await assertSafeFetchTarget(
+    let target = await resolveValidatedTarget(
         typeof input === 'string' ? input : input.url
-    )).toString();
+    );
     let hops = 0;
 
     for (;;) {
-        const url = new URL(current);
-        const agent = await pinnedAgent(url);
-        const response = await nodeFetch(current, { ...init, agent, redirect: 'manual' });
+        const agent = pinnedAgent(target.url, target.addresses);
+        const response = await nodeFetch(target.url.toString(), { ...init, agent, redirect: 'manual' });
 
         if (!REDIRECT_STATUSES.has(response.status)) {
             return response;
@@ -213,7 +231,9 @@ export async function safeFetch(input: RequestInfo, init: RequestInit = {}): Pro
         if (hops > MAX_REDIRECT_HOPS) {
             throw new Error('Blocked URL: too many redirects');
         }
-        current = (await nextHopUrl(current, location)).toString();
+        target = await resolveValidatedTarget(
+            new URL(location, target.url.toString()).toString()
+        );
     }
 }
 
@@ -250,6 +270,8 @@ export async function safeFetchGlobal(input: string, init: GlobalFetchInit = {})
         if (hops > MAX_REDIRECT_HOPS) {
             throw new Error('Blocked URL: too many redirects');
         }
-        current = (await nextHopUrl(current, location)).toString();
+        current = (await assertSafeFetchTarget(
+            new URL(location, current).toString()
+        )).toString();
     }
 }
