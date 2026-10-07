@@ -576,8 +576,7 @@ async function scrapeLinkedInJob(
             normalizedUrl = `https://www.linkedin.com/jobs/view/${jobIdMatch[1]}`;
         }
 
-        // Defense in depth: the browser is a stronger SSRF client than fetch,
-        // so validate the destination even though callers already check it.
+        // The browser is a stronger SSRF client than fetch; validate anyway.
         await assertSafeFetchTarget(normalizedUrl);
 
         browser = await chromium.launch({

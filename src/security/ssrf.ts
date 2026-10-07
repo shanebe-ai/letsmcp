@@ -1,28 +1,17 @@
 /**
  * SSRF guard for outbound fetches.
  *
- * The model (or any API caller) supplies the URL, so the URL is untrusted
- * input. This module resolves the destination exactly once per fetch, validates
- * every resolved address before anything connects, follows redirects manually
- * so every hop is revalidated, and pins the validated IP at connect time so a
- * hostile DNS answer cannot swap the address between validation and
- * connection (DNS rebinding). The single-resolution design is what makes the
- * pinning sound: the pinned address always comes from the same DNS answer
- * that passed validation.
+ * The model (or any API caller) supplies the URL, so treat every URL as
+ * untrusted. Resolve the destination once per fetch, validate it before
+ * anything connects, revalidate each redirect hop, and pin the validated IP
+ * at connect time so a hostile DNS answer cannot swap the address between
+ * validation and connection. Anything that cannot be validated fails closed.
  *
- * Blocked: loopback, RFC1918 private, link local (including the cloud
- * metadata addresses 169.254.169.254 and metadata.google.internal), CGNAT,
- * multicast, reserved, documentation ranges, and anything DNS cannot resolve
- * (fail closed).
- *
- * Two fetch flavors exist because the codebase uses both:
- * - safeFetch: node-fetch, used by the MCP webFetch tool. Gets the full
- *   treatment including connect-time IP pinning via a custom lookup.
- * - safeFetchGlobal: the global (undici) fetch, used by the REST routes.
- *   Undici has no per-request lookup hook, so connect-time pinning is not
- *   available there; the pre-connect validation and per-hop revalidation
- *   still apply. If these routes ever move to node-fetch, switch them to
- *   safeFetch for the pinned variant.
+ * Two flavors because the codebase uses two fetch implementations:
+ * - safeFetch: node-fetch (MCP tools), with connect-time IP pinning.
+ * - safeFetchGlobal: global fetch (REST routes). Undici has no per-request
+ *   DNS lookup hook, so no pinning here; validation and per-hop
+ *   revalidation still apply.
  */
 
 import dns from 'node:dns/promises';
@@ -35,24 +24,13 @@ import nodeFetch, { type RequestInfo, type RequestInit, type Response } from 'no
 const MAX_REDIRECT_HOPS = 5;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
-/** Hostnames that are never allowed, regardless of what DNS says. */
-const BLOCKED_HOSTNAMES = new Set([
-    'metadata.google.internal',
-]);
-
+/** Never allowed, regardless of what DNS says. */
 export function isBlockedHostname(hostname: string): boolean {
     const h = hostname.toLowerCase().replace(/\.$/, '');
-    if (BLOCKED_HOSTNAMES.has(h)) {
-        return true;
-    }
-    // Catch metadata.google.internal under any subdomain spelling.
     return h === 'metadata.google.internal' || h.endsWith('.metadata.google.internal');
 }
 
-/**
- * True when an IP literal is loopback, private, link local, CGNAT,
- * multicast, reserved, or otherwise not a publicly routable address.
- */
+/** True when an IP address is not publicly routable. */
 export function isNonPublicIp(ip: string): boolean {
     if (net.isIPv4(ip)) {
         const [a, b] = ip.split('.').map(Number);
@@ -63,7 +41,7 @@ export function isNonPublicIp(ip: string): boolean {
         if (a === 169 && b === 254) return true; // link local, cloud metadata
         if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
         if (a === 0) return true; // this network
-        if (a === 192 && b === 0 && ip.startsWith('192.0.2.')) return true; // TEST-NET-1
+        if (ip.startsWith('192.0.2.')) return true; // TEST-NET-1
         if (ip.startsWith('198.51.100.')) return true; // TEST-NET-2
         if (ip.startsWith('203.0.113.')) return true; // TEST-NET-3
         if (a >= 224) return true; // multicast and reserved
@@ -71,9 +49,9 @@ export function isNonPublicIp(ip: string): boolean {
     }
     if (net.isIPv6(ip)) {
         let normalized = ip.toLowerCase();
-        // IPv4-mapped IPv6 addresses: judge the embedded IPv4 address.
         const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
         if (mapped) {
+            // IPv4-mapped IPv6: judge the embedded IPv4 address.
             return isNonPublicIp(mapped[1]);
         }
         if (normalized === '::1') return true; // loopback
@@ -88,20 +66,16 @@ export function isNonPublicIp(ip: string): boolean {
 }
 
 /**
- * A URL whose destination was resolved and validated. The addresses are the
- * exact DNS answer that passed validation; pinning must use these records
- * and never re-resolve, otherwise a hostile DNS can swap the address between
- * the check and the connection (DNS rebinding).
+ * A URL whose destination was resolved and validated. Pinning must use
+ * these addresses and never re-resolve, or a hostile DNS can swap the
+ * address between the check and the connection (DNS rebinding).
  */
 export interface ValidatedTarget {
     url: URL;
     addresses: LookupAddress[];
 }
 
-/**
- * Resolve a URL's destination exactly once and validate it. Throws on any
- * violation. Returns the parsed URL plus the validated DNS records.
- */
+/** Resolve a URL's destination exactly once and validate it. Throws on any violation. */
 export async function resolveValidatedTarget(rawUrl: string): Promise<ValidatedTarget> {
     let url: URL;
     try {
@@ -117,8 +91,7 @@ export async function resolveValidatedTarget(rawUrl: string): Promise<ValidatedT
         throw new Error('Blocked URL: missing hostname');
     }
     // URL.hostname keeps brackets on IPv6 literals; strip them for the checks.
-    const hostname = url.hostname.replace(/^\[|\]$/g, '');
-    if (isBlockedHostname(hostname)) {
+    const hostname = url.hostname.replace(/^\[|\]$/g, '');    if (isBlockedHostname(hostname)) {
         throw new Error(`Blocked URL: hostname not allowed (${hostname})`);
     }
 
@@ -150,21 +123,14 @@ export async function resolveValidatedTarget(rawUrl: string): Promise<ValidatedT
     return { url, addresses };
 }
 
-/**
- * Validate the destination of a URL before connecting. Throws on any
- * violation. Returns the parsed URL when the destination is safe.
- */
+/** Validate a URL's destination before connecting. Throws on any violation. */
 export async function assertSafeFetchTarget(rawUrl: string): Promise<URL> {
     return (await resolveValidatedTarget(rawUrl)).url;
 }
 
-/**
- * Strict LinkedIn job URL check. The old substring check
- * (url.includes('linkedin.com/jobs')) accepted attacker URLs like
- * https://attacker.example/?x=linkedin.com/jobs and then drove a full
- * Playwright browser at them. Require a real linkedin.com host and a
- * /jobs path.
- */
+/** Strict LinkedIn job URL check. The old substring check accepted attacker
+ * URLs like https://attacker.example/?x=linkedin.com/jobs and then drove a
+ * full Playwright browser at them. */
 export function isLinkedInJobUrl(rawUrl: string): boolean {
     let url: URL;
     try {
@@ -179,12 +145,9 @@ export function isLinkedInJobUrl(rawUrl: string): boolean {
 
 type PinnedAgent = http.Agent | https.Agent;
 
-/**
- * Build an agent that pins the validated IP at connect time. The addresses
- * must come from the same DNS answer that passed validation (see
- * resolveValidatedTarget); re-resolving here would reopen the DNS rebinding
- * window this pinning exists to close.
- */
+/** Build an agent that pins the validated IP at connect time. The addresses
+ * must come from the same DNS answer that passed validation; re-resolving
+ * here would reopen the DNS rebinding window. */
 function pinnedAgent(url: URL, addresses: LookupAddress[]): PinnedAgent {
     const { address, family } = addresses[0];
     // Node 20+ agents request lookup with { all: true } for Happy Eyeballs;
@@ -202,12 +165,7 @@ function pinnedAgent(url: URL, addresses: LookupAddress[]): PinnedAgent {
         : new http.Agent(agentOptions);
 }
 
-/**
- * Fetch with SSRF protection, node-fetch edition (MCP tools).
- * Resolves the destination once, validates it, follows redirects manually
- * with a hop cap, revalidates every hop, and pins the validated IP at
- * connect time.
- */
+/** Fetch with SSRF protection, node-fetch edition (MCP tools). */
 export async function safeFetch(input: RequestInfo, init: RequestInit = {}): Promise<Response> {
     let target = await resolveValidatedTarget(
         typeof input === 'string' ? input : input.url
@@ -244,13 +202,7 @@ export interface GlobalFetchInit {
     signal?: AbortSignal;
 }
 
-/**
- * Fetch with SSRF protection, global fetch edition (REST routes).
- * Same validation and manual redirect handling as safeFetch. Note: the
- * global fetch has no per-request DNS lookup hook, so connect-time IP
- * pinning is not available here; pre-connect validation and per-hop
- * revalidation still apply.
- */
+/** Fetch with SSRF protection, global fetch edition (REST routes). */
 export async function safeFetchGlobal(input: string, init: GlobalFetchInit = {}): Promise<globalThis.Response> {
     let current = (await assertSafeFetchTarget(input)).toString();
     let hops = 0;

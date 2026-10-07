@@ -855,10 +855,7 @@ export function registerTools(server: Server) {
                         };
                     }
 
-                    // Fetch content with SSRF protection: the URL comes from the
-                    // model, so the destination is validated, redirects are
-                    // followed manually with per-hop revalidation, and the
-                    // validated IP is pinned at connect time.
+                    // Fetch content with SSRF protection.
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
