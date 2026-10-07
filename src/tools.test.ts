@@ -1,8 +1,20 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { registerTools } from './tools.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { Response } from 'node-fetch';
+import { safeFetch } from './security/ssrf.js';
+
+// The webFetch tests must not hit the real network: they were flaky because
+// example.com responses vary by environment (proxy bodies, TLS interception).
+// Mock only the fetch layer; everything else in the guard module stays real.
+vi.mock('./security/ssrf.js', async (importOriginal) => {
+    const mod = await importOriginal<typeof import('./security/ssrf.js')>();
+    return { ...mod, safeFetch: vi.fn() };
+});
+
+const mockSafeFetch = vi.mocked(safeFetch);
 
 describe('MCP Tools', () => {
     let server: Server;
@@ -489,7 +501,18 @@ describe('MCP Tools', () => {
     });
 
     describe('webFetch', () => {
+        beforeEach(() => {
+            mockSafeFetch.mockReset();
+        });
+
         it('should fetch web content', async () => {
+            mockSafeFetch.mockResolvedValue(
+                new Response('<html><body>Example Domain</body></html>', {
+                    status: 200,
+                    headers: { 'content-type': 'text/html' },
+                })
+            );
+
             const result = await callTool('webFetch', {
                 url: 'https://example.com'
             });
@@ -509,6 +532,10 @@ describe('MCP Tools', () => {
         });
 
         it('should handle 404 errors', async () => {
+            mockSafeFetch.mockResolvedValue(
+                new Response('Not Found', { status: 404, statusText: 'Not Found' })
+            );
+
             const result = await callTool('webFetch', {
                 url: 'https://example.com/nonexistent-page-12345'
             });
