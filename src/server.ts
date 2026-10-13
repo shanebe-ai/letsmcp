@@ -9,6 +9,11 @@ import { registerTools } from './tools.js';
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || 'localhost';
 
+// Spec revision this server targets, stated in words to stay readable.
+// Revisit by July 2027, when the deprecation window for the current
+// feature set closes.
+const MCP_SPEC_TARGET = 'November 2025';
+
 /**
  * Create and configure the MCP server
  */
@@ -51,6 +56,7 @@ export function createServer(): Server {
                         uri: 'server://info',
                         mimeType: 'text/plain',
                         text: `letsmcp MCP Server v2.0.0
+MCP spec target: ${MCP_SPEC_TARGET} revision (revisit by July 2027)
 Running on: ${HOST}:${PORT}
 Capabilities: Tools, Resources
 Available Tools: echoText, summarizeDirectory, saveToFile, readFile, searchFiles, executeCommand, webFetch, scrapeLinkedInJob
