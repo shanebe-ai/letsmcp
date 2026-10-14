@@ -3,6 +3,7 @@ import {
     ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { z } from 'zod';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { spawn } from 'child_process';
@@ -11,60 +12,69 @@ import { chromium } from 'playwright';
 import { isLinkedInJobUrl, safeFetch } from './security/ssrf.js';
 
 /**
- * Type definitions for tool inputs
+ * Zod schemas for tool inputs. Each schema is the single source of truth for
+ * the shape of a tool's arguments: the TypeScript type is inferred from it
+ * and every call is validated against it before the handler runs.
  */
+const EchoTextSchema = z.object({
+    text: z.string(),
+});
+export type EchoTextInput = z.infer<typeof EchoTextSchema>;
 
-// Existing tools
-export interface EchoTextInput {
-    text: string;
-}
+const SummarizeDirectorySchema = z.object({
+    path: z.string().min(1),
+});
+export type SummarizeDirectoryInput = z.infer<typeof SummarizeDirectorySchema>;
 
-export interface SummarizeDirectoryInput {
-    path: string;
-}
+const SaveToFileSchema = z.object({
+    content: z.string(),
+    filename: z.string(),
+    category: z.string().optional(),
+    overwrite: z.boolean().optional(),
+});
+export type SaveToFileInput = z.infer<typeof SaveToFileSchema>;
 
-// New tools
-export interface SaveToFileInput {
-    content: string;
-    filename: string;
-    category?: string;
-    overwrite?: boolean;
-}
+const ReadFileSchema = z.object({
+    path: z.string().min(1),
+    encoding: z.string().optional(),
+    maxSize: z.number().optional(),
+});
+export type ReadFileInput = z.infer<typeof ReadFileSchema>;
 
-export interface ReadFileInput {
-    path: string;
-    encoding?: string;
-    maxSize?: number;
-}
+const SearchFilesSchema = z.object({
+    query: z.string(),
+    path: z.string(),
+    fileTypes: z.array(z.string()).optional(),
+    caseSensitive: z.boolean().optional(),
+    maxResults: z.number().optional(),
+    recursive: z.boolean().optional(),
+});
+export type SearchFilesInput = z.infer<typeof SearchFilesSchema>;
 
-export interface SearchFilesInput {
-    query: string;
-    path: string;
-    fileTypes?: string[];
-    caseSensitive?: boolean;
-    maxResults?: number;
-    recursive?: boolean;
-}
+const ExecuteCommandSchema = z.object({
+    command: z.string(),
+    args: z.array(z.string()).optional(),
+    cwd: z.string().optional(),
+    timeout: z.number().optional(),
+});
+export type ExecuteCommandInput = z.infer<typeof ExecuteCommandSchema>;
 
-export interface ExecuteCommandInput {
-    command: string;
-    args?: string[];
-    cwd?: string;
-    timeout?: number;
-}
+const WebFetchSchema = z.object({
+    url: z.string().min(1),
+    selector: z.string().optional(),
+    format: z.string().optional(),
+    timeout: z.number().optional(),
+});
+export type WebFetchInput = z.infer<typeof WebFetchSchema>;
 
-export interface WebFetchInput {
-    url: string;
-    selector?: string;
-    format?: 'text' | 'html' | 'json';
-    timeout?: number;
-}
-
-export interface ScrapeLinkedInJobInput {
-    url: string;
-    includeDescription?: boolean;
-    screenshot?: boolean;
-}
+const ScrapeLinkedInJobSchema = z.object({
+    url: z.string().min(1).refine(isLinkedInJobUrl, {
+        message: 'Expected a LinkedIn job URL',
+    }),
+    includeDescription: z.boolean().optional(),
+    screenshot: z.boolean().optional(),
+});
+export type ScrapeLinkedInJobInput = z.infer<typeof ScrapeLinkedInJobSchema>;
 
 // Directory entry type for internal use
 export interface DirectoryEntry {
@@ -74,47 +84,18 @@ export interface DirectoryEntry {
 }
 
 /**
- * Validation helpers
+ * Zod schema for tool results. Every handler return value is checked against
+ * it before leaving the server, so a malformed result can never reach the client.
  */
-function validateEchoTextInput(args: unknown): args is EchoTextInput {
-    const input = args as Record<string, unknown>;
-    return typeof input.text === 'string';
-}
-
-function validateSummarizeDirectoryInput(args: unknown): args is SummarizeDirectoryInput {
-    const input = args as Record<string, unknown>;
-    return typeof input.path === 'string' && input.path.length > 0;
-}
-
-function validateSaveToFileInput(args: unknown): args is SaveToFileInput {
-    const input = args as Record<string, unknown>;
-    return typeof input.content === 'string' && typeof input.filename === 'string';
-}
-
-function validateReadFileInput(args: unknown): args is ReadFileInput {
-    const input = args as Record<string, unknown>;
-    return typeof input.path === 'string' && input.path.length > 0;
-}
-
-function validateSearchFilesInput(args: unknown): args is SearchFilesInput {
-    const input = args as Record<string, unknown>;
-    return typeof input.query === 'string' && typeof input.path === 'string';
-}
-
-function validateExecuteCommandInput(args: unknown): args is ExecuteCommandInput {
-    const input = args as Record<string, unknown>;
-    return typeof input.command === 'string';
-}
-
-function validateWebFetchInput(args: unknown): args is WebFetchInput {
-    const input = args as Record<string, unknown>;
-    return typeof input.url === 'string' && input.url.length > 0;
-}
-
-function validateScrapeLinkedInJobInput(args: unknown): args is ScrapeLinkedInJobInput {
-    const input = args as Record<string, unknown>;
-    return typeof input.url === 'string' && isLinkedInJobUrl(input.url);
-}
+const ToolResultSchema = z.object({
+    content: z.array(
+        z.object({
+            type: z.literal('text'),
+            text: z.string(),
+        })
+    ),
+    isError: z.boolean().optional(),
+});
 
 /**
  * Security helper: Validate and resolve file paths
@@ -355,657 +336,682 @@ export function registerTools(server: Server) {
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const args = request.params.arguments as Record<string, unknown>;
 
-        switch (request.params.name) {
-            case 'echoText': {
-                // Validate input type
-                if (!validateEchoTextInput(args)) {
-                    return {
-                        content: [
-                            {
-                                type: 'text',
-                                text: 'Error: Invalid input. Expected { text: string }.',
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-
-                const input: EchoTextInput = args;
-
-                // Check for empty input and provide friendly error
-                if (!input.text || input.text.trim().length === 0) {
-                    return {
-                        content: [
-                            {
-                                type: 'text',
-                                text: 'Oops! It looks like you sent me empty text. Please provide some text to echo back. 😊',
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-
-                // Return structured response
-                const response = {
-                    echoed: input.text
-                };
-
-                return {
-                    content: [
-                        {
-                            type: 'text' as const,
-                            text: JSON.stringify(response, null, 2),
-                        },
-                    ],
-                };
-            }
-
-            case 'summarizeDirectory': {
-                // Validate input
-                if (!validateSummarizeDirectoryInput(args)) {
-                    return {
-                        content: [
-                            {
-                                type: 'text',
-                                text: 'Error: Invalid input. Expected { path: string } where path is non-empty.',
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-
-                const input: SummarizeDirectoryInput = args;
-
-                try {
-                    // Resolve path relative to project root (current working directory)
-                    const resolvedPath = path.resolve(process.cwd(), input.path);
-
-                    // Check if path exists
-                    try {
-                        await fs.access(resolvedPath);
-                    } catch {
+        const result = await (async () => {
+                switch (request.params.name) {
+                case 'echoText': {
+                    // Validate input type
+                    const parsed = EchoTextSchema.safeParse(args);
+                    if (!parsed.success) {
                         return {
                             content: [
                                 {
                                     type: 'text',
-                                    text: `The directory "${input.path}" doesn't seem to exist. Please check the path and try again. 📁`,
+                                    text: 'Error: Invalid input. Expected { text: string }.',
                                 },
                             ],
                             isError: true,
                         };
                     }
 
-                    // Read directory entries
-                    const entries = await fs.readdir(resolvedPath, { withFileTypes: true });
+                    const input = parsed.data;
 
-                    // Separate files and directories
-                    const files = entries.filter(e => e.isFile());
-                    const directories = entries.filter(e => e.isDirectory());
-
-                    const totalFiles = files.length;
-                    const totalDirs = directories.length;
-                    const totalItems = entries.length;
-
-                    // Limit to 20 items for display
-                    const displayLimit = 20;
-                    const itemsToShow = entries.slice(0, displayLimit);
-
-                    // Get a few example names
-                    const exampleFiles = files.slice(0, 3).map(f => f.name);
-                    const exampleDirs = directories.slice(0, 3).map(d => d.name);
-
-                    // Build plain-text summary
-                    let summary = `Directory: ${input.path}\n\n`;
-                    summary += `Found ${totalFiles} file${totalFiles !== 1 ? 's' : ''} and ${totalDirs} director${totalDirs !== 1 ? 'ies' : 'y'} (${totalItems} total)\n\n`;
-
-                    if (exampleFiles.length > 0) {
-                        summary += `Example files: ${exampleFiles.join(', ')}\n`;
-                    }
-                    if (exampleDirs.length > 0) {
-                        summary += `Example directories: ${exampleDirs.join(', ')}\n`;
+                    // Check for empty input and provide friendly error
+                    if (!input.text || input.text.trim().length === 0) {
+                        return {
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: 'Oops! It looks like you sent me empty text. Please provide some text to echo back. 😊',
+                                },
+                            ],
+                            isError: true,
+                        };
                     }
 
-                    if (totalItems > displayLimit) {
-                        summary += `\nShowing first ${displayLimit} of ${totalItems} items:\n`;
-                    } else if (totalItems > 0) {
-                        summary += `\nAll items:\n`;
-                    }
-
-                    // List items (up to 20)
-                    if (itemsToShow.length > 0) {
-                        const itemList = itemsToShow.map(item =>
-                            `  ${item.isDirectory() ? '📁' : '📄'} ${item.name}`
-                        ).join('\n');
-                        summary += itemList;
-                    }
+                    // Return structured response
+                    const response = {
+                        echoed: input.text
+                    };
 
                     return {
                         content: [
                             {
                                 type: 'text' as const,
-                                text: summary,
+                                text: JSON.stringify(response, null, 2),
                             },
                         ],
                     };
-
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                    return {
-                        content: [
-                            {
-                                type: 'text',
-                                text: `Oops! Something went wrong reading "${input.path}": ${errorMessage}`,
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-            }
-
-            case 'saveToFile': {
-                if (!validateSaveToFileInput(args)) {
-                    return {
-                        content: [{
-                            type: 'text',
-                            text: 'Error: Invalid input. Expected { content: string, filename: string }.',
-                        }],
-                        isError: true,
-                    };
                 }
 
-                const input: SaveToFileInput = args;
-
-                try {
-                    // Build file path
-                    const baseDir = path.join(process.cwd(), 'mcp-files');
-                    let filePath: string;
-
-                    if (input.category) {
-                        filePath = path.join(baseDir, input.category, input.filename);
-                    } else {
-                        filePath = path.join(baseDir, input.filename);
-                    }
-
-                    // Validate path (prevent directory traversal)
-                    const resolved = path.resolve(filePath);
-                    if (!resolved.startsWith(path.resolve(baseDir))) {
+                case 'summarizeDirectory': {
+                    // Validate input
+                    const parsed = SummarizeDirectorySchema.safeParse(args);
+                    if (!parsed.success) {
                         return {
-                            content: [{
-                                type: 'text',
-                                text: 'Error: Invalid path. Directory traversal not allowed.',
-                            }],
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: 'Error: Invalid input. Expected { path: string } where path is non-empty.',
+                                },
+                            ],
                             isError: true,
                         };
                     }
 
-                    // Check if file exists
-                    const exists = await fs.access(resolved).then(() => true).catch(() => false);
-                    if (exists && !input.overwrite) {
-                        return {
-                            content: [{
-                                type: 'text',
-                                text: `File already exists at "${resolved}". Set overwrite=true to replace it.`,
-                            }],
-                            isError: true,
-                        };
-                    }
+                    const input = parsed.data;
 
-                    // Create directory if needed
-                    await fs.mkdir(path.dirname(resolved), { recursive: true });
+                    try {
+                        // Resolve path relative to project root (current working directory)
+                        const resolvedPath = path.resolve(process.cwd(), input.path);
 
-                    // Write file
-                    await fs.writeFile(resolved, input.content, 'utf-8');
-
-                    const response = {
-                        success: true,
-                        path: resolved,
-                        message: 'File saved successfully'
-                    };
-
-                    return {
-                        content: [{
-                            type: 'text' as const,
-                            text: JSON.stringify(response, null, 2),
-                        }],
-                    };
-
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                    return {
-                        content: [{
-                            type: 'text',
-                            text: `Error saving file: ${errorMessage}`,
-                        }],
-                        isError: true,
-                    };
-                }
-            }
-
-            case 'readFile': {
-                if (!validateReadFileInput(args)) {
-                    return {
-                        content: [{
-                            type: 'text',
-                            text: 'Error: Invalid input. Expected { path: string }.',
-                        }],
-                        isError: true,
-                    };
-                }
-
-                const input: ReadFileInput = args;
-                const encoding = (input.encoding || 'utf-8') as BufferEncoding;
-                const maxSize = input.maxSize || 10485760; // 10MB default
-
-                try {
-                    // Resolve path
-                    const resolved = path.resolve(process.cwd(), input.path);
-
-                    // Check if file exists
-                    const stats = await fs.stat(resolved);
-
-                    if (!stats.isFile()) {
-                        return {
-                            content: [{
-                                type: 'text',
-                                text: `Error: "${input.path}" is not a file.`,
-                            }],
-                            isError: true,
-                        };
-                    }
-
-                    // Check file size
-                    if (stats.size > maxSize) {
-                        return {
-                            content: [{
-                                type: 'text',
-                                text: `Error: File too large (${stats.size} bytes). Maximum size is ${maxSize} bytes.`,
-                            }],
-                            isError: true,
-                        };
-                    }
-
-                    // Read file
-                    const content = await fs.readFile(resolved, encoding);
-
-                    const response = {
-                        content,
-                        metadata: {
-                            path: resolved,
-                            size: stats.size,
-                            modified: stats.mtime.toISOString(),
-                            encoding,
+                        // Check if path exists
+                        try {
+                            await fs.access(resolvedPath);
+                        } catch {
+                            return {
+                                content: [
+                                    {
+                                        type: 'text',
+                                        text: `The directory "${input.path}" doesn't seem to exist. Please check the path and try again. 📁`,
+                                    },
+                                ],
+                                isError: true,
+                            };
                         }
-                    };
 
-                    return {
-                        content: [{
-                            type: 'text' as const,
-                            text: JSON.stringify(response, null, 2),
-                        }],
-                    };
+                        // Read directory entries
+                        const entries = await fs.readdir(resolvedPath, { withFileTypes: true });
 
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                    return {
-                        content: [{
-                            type: 'text',
-                            text: `Error reading file: ${errorMessage}`,
-                        }],
-                        isError: true,
-                    };
+                        // Separate files and directories
+                        const files = entries.filter(e => e.isFile());
+                        const directories = entries.filter(e => e.isDirectory());
+
+                        const totalFiles = files.length;
+                        const totalDirs = directories.length;
+                        const totalItems = entries.length;
+
+                        // Limit to 20 items for display
+                        const displayLimit = 20;
+                        const itemsToShow = entries.slice(0, displayLimit);
+
+                        // Get a few example names
+                        const exampleFiles = files.slice(0, 3).map(f => f.name);
+                        const exampleDirs = directories.slice(0, 3).map(d => d.name);
+
+                        // Build plain-text summary
+                        let summary = `Directory: ${input.path}\n\n`;
+                        summary += `Found ${totalFiles} file${totalFiles !== 1 ? 's' : ''} and ${totalDirs} director${totalDirs !== 1 ? 'ies' : 'y'} (${totalItems} total)\n\n`;
+
+                        if (exampleFiles.length > 0) {
+                            summary += `Example files: ${exampleFiles.join(', ')}\n`;
+                        }
+                        if (exampleDirs.length > 0) {
+                            summary += `Example directories: ${exampleDirs.join(', ')}\n`;
+                        }
+
+                        if (totalItems > displayLimit) {
+                            summary += `\nShowing first ${displayLimit} of ${totalItems} items:\n`;
+                        } else if (totalItems > 0) {
+                            summary += `\nAll items:\n`;
+                        }
+
+                        // List items (up to 20)
+                        if (itemsToShow.length > 0) {
+                            const itemList = itemsToShow.map(item =>
+                                `  ${item.isDirectory() ? '📁' : '📄'} ${item.name}`
+                            ).join('\n');
+                            summary += itemList;
+                        }
+
+                        return {
+                            content: [
+                                {
+                                    type: 'text' as const,
+                                    text: summary,
+                                },
+                            ],
+                        };
+
+                    } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                        return {
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: `Oops! Something went wrong reading "${input.path}": ${errorMessage}`,
+                                },
+                            ],
+                            isError: true,
+                        };
+                    }
                 }
-            }
 
-            case 'searchFiles': {
-                if (!validateSearchFilesInput(args)) {
-                    return {
-                        content: [{
-                            type: 'text',
-                            text: 'Error: Invalid input. Expected { query: string, path: string }.',
-                        }],
-                        isError: true,
-                    };
+                case 'saveToFile': {
+                    const parsed = SaveToFileSchema.safeParse(args);
+                    if (!parsed.success) {
+                        return {
+                            content: [{
+                                type: 'text',
+                                text: 'Error: Invalid input. Expected { content: string, filename: string }.',
+                            }],
+                            isError: true,
+                        };
+                    }
+
+                    const input = parsed.data;
+
+                    try {
+                        // Build file path
+                        const baseDir = path.join(process.cwd(), 'mcp-files');
+                        let filePath: string;
+
+                        if (input.category) {
+                            filePath = path.join(baseDir, input.category, input.filename);
+                        } else {
+                            filePath = path.join(baseDir, input.filename);
+                        }
+
+                        // Validate path (prevent directory traversal)
+                        const resolved = path.resolve(filePath);
+                        if (!resolved.startsWith(path.resolve(baseDir))) {
+                            return {
+                                content: [{
+                                    type: 'text',
+                                    text: 'Error: Invalid path. Directory traversal not allowed.',
+                                }],
+                                isError: true,
+                            };
+                        }
+
+                        // Check if file exists
+                        const exists = await fs.access(resolved).then(() => true).catch(() => false);
+                        if (exists && !input.overwrite) {
+                            return {
+                                content: [{
+                                    type: 'text',
+                                    text: `File already exists at "${resolved}". Set overwrite=true to replace it.`,
+                                }],
+                                isError: true,
+                            };
+                        }
+
+                        // Create directory if needed
+                        await fs.mkdir(path.dirname(resolved), { recursive: true });
+
+                        // Write file
+                        await fs.writeFile(resolved, input.content, 'utf-8');
+
+                        const response = {
+                            success: true,
+                            path: resolved,
+                            message: 'File saved successfully'
+                        };
+
+                        return {
+                            content: [{
+                                type: 'text' as const,
+                                text: JSON.stringify(response, null, 2),
+                            }],
+                        };
+
+                    } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                        return {
+                            content: [{
+                                type: 'text',
+                                text: `Error saving file: ${errorMessage}`,
+                            }],
+                            isError: true,
+                        };
+                    }
                 }
 
-                const input: SearchFilesInput = args;
-                const caseSensitive = input.caseSensitive ?? false;
-                const maxResults = input.maxResults ?? 50;
-                const recursive = input.recursive ?? true;
+                case 'readFile': {
+                    const parsed = ReadFileSchema.safeParse(args);
+                    if (!parsed.success) {
+                        return {
+                            content: [{
+                                type: 'text',
+                                text: 'Error: Invalid input. Expected { path: string }.',
+                            }],
+                            isError: true,
+                        };
+                    }
 
-                try {
-                    // Resolve path
-                    const resolved = path.resolve(process.cwd(), input.path);
+                    const input = parsed.data;
+                    const encoding = (input.encoding || 'utf-8') as BufferEncoding;
+                    const maxSize = input.maxSize || 10485760; // 10MB default
 
-                    // Create regex pattern
-                    const flags = caseSensitive ? 'g' : 'gi';
-                    const regex = new RegExp(input.query, flags);
+                    try {
+                        // Resolve path
+                        const resolved = path.resolve(process.cwd(), input.path);
 
-                    const matches: any[] = [];
-                    let filesSearched = 0;
+                        // Check if file exists
+                        const stats = await fs.stat(resolved);
 
-                    // Recursive search function
-                    async function searchDirectory(dir: string) {
-                        if (matches.length >= maxResults) return;
+                        if (!stats.isFile()) {
+                            return {
+                                content: [{
+                                    type: 'text',
+                                    text: `Error: "${input.path}" is not a file.`,
+                                }],
+                                isError: true,
+                            };
+                        }
 
-                        const entries = await fs.readdir(dir, { withFileTypes: true });
+                        // Check file size
+                        if (stats.size > maxSize) {
+                            return {
+                                content: [{
+                                    type: 'text',
+                                    text: `Error: File too large (${stats.size} bytes). Maximum size is ${maxSize} bytes.`,
+                                }],
+                                isError: true,
+                            };
+                        }
 
-                        for (const entry of entries) {
-                            if (matches.length >= maxResults) break;
+                        // Read file
+                        const content = await fs.readFile(resolved, encoding);
 
-                            const fullPath = path.join(dir, entry.name);
+                        const response = {
+                            content,
+                            metadata: {
+                                path: resolved,
+                                size: stats.size,
+                                modified: stats.mtime.toISOString(),
+                                encoding,
+                            }
+                        };
 
-                            if (entry.isDirectory() && recursive) {
-                                await searchDirectory(fullPath);
-                            } else if (entry.isFile()) {
-                                // Check file type filter
-                                if (input.fileTypes && input.fileTypes.length > 0) {
-                                    const ext = path.extname(entry.name).slice(1);
-                                    if (!input.fileTypes.includes(ext)) continue;
-                                }
+                        return {
+                            content: [{
+                                type: 'text' as const,
+                                text: JSON.stringify(response, null, 2),
+                            }],
+                        };
 
-                                filesSearched++;
+                    } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                        return {
+                            content: [{
+                                type: 'text',
+                                text: `Error reading file: ${errorMessage}`,
+                            }],
+                            isError: true,
+                        };
+                    }
+                }
 
-                                try {
-                                    const content = await fs.readFile(fullPath, 'utf-8');
-                                    const lines = content.split('\n');
+                case 'searchFiles': {
+                    const parsed = SearchFilesSchema.safeParse(args);
+                    if (!parsed.success) {
+                        return {
+                            content: [{
+                                type: 'text',
+                                text: 'Error: Invalid input. Expected { query: string, path: string }.',
+                            }],
+                            isError: true,
+                        };
+                    }
 
-                                    lines.forEach((line, index) => {
-                                        if (matches.length >= maxResults) return;
-                                        if (regex.test(line)) {
-                                            matches.push({
-                                                file: path.relative(process.cwd(), fullPath),
-                                                line: index + 1,
-                                                content: line.trim(),
-                                            });
-                                        }
-                                    });
-                                } catch {
-                                    // Skip files that can't be read as text
+                    const input = parsed.data;
+                    const caseSensitive = input.caseSensitive ?? false;
+                    const maxResults = input.maxResults ?? 50;
+                    const recursive = input.recursive ?? true;
+
+                    try {
+                        // Resolve path
+                        const resolved = path.resolve(process.cwd(), input.path);
+
+                        // Create regex pattern
+                        const flags = caseSensitive ? 'g' : 'gi';
+                        const regex = new RegExp(input.query, flags);
+
+                        const matches: any[] = [];
+                        let filesSearched = 0;
+
+                        // Recursive search function
+                        async function searchDirectory(dir: string) {
+                            if (matches.length >= maxResults) return;
+
+                            const entries = await fs.readdir(dir, { withFileTypes: true });
+
+                            for (const entry of entries) {
+                                if (matches.length >= maxResults) break;
+
+                                const fullPath = path.join(dir, entry.name);
+
+                                if (entry.isDirectory() && recursive) {
+                                    await searchDirectory(fullPath);
+                                } else if (entry.isFile()) {
+                                    // Check file type filter
+                                    if (input.fileTypes && input.fileTypes.length > 0) {
+                                        const ext = path.extname(entry.name).slice(1);
+                                        if (!input.fileTypes.includes(ext)) continue;
+                                    }
+
+                                    filesSearched++;
+
+                                    try {
+                                        const content = await fs.readFile(fullPath, 'utf-8');
+                                        const lines = content.split('\n');
+
+                                        lines.forEach((line, index) => {
+                                            if (matches.length >= maxResults) return;
+                                            if (regex.test(line)) {
+                                                matches.push({
+                                                    file: path.relative(process.cwd(), fullPath),
+                                                    line: index + 1,
+                                                    content: line.trim(),
+                                                });
+                                            }
+                                        });
+                                    } catch {
+                                        // Skip files that can't be read as text
+                                    }
                                 }
                             }
                         }
+
+                        await searchDirectory(resolved);
+
+                        const response = {
+                            matches,
+                            totalMatches: matches.length,
+                            filesSearched,
+                        };
+
+                        return {
+                            content: [{
+                                type: 'text' as const,
+                                text: JSON.stringify(response, null, 2),
+                            }],
+                        };
+
+                    } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                        return {
+                            content: [{
+                                type: 'text',
+                                text: `Error searching files: ${errorMessage}`,
+                            }],
+                            isError: true,
+                        };
+                    }
+                }
+
+                case 'executeCommand': {
+                    const parsed = ExecuteCommandSchema.safeParse(args);
+                    if (!parsed.success) {
+                        return {
+                            content: [{
+                                type: 'text',
+                                text: 'Error: Invalid input. Expected { command: string }.',
+                            }],
+                            isError: true,
+                        };
                     }
 
-                    await searchDirectory(resolved);
+                    const input = parsed.data;
+                    const timeout = input.timeout || 30000;
+                    const cwd = input.cwd || process.cwd();
 
-                    const response = {
-                        matches,
-                        totalMatches: matches.length,
-                        filesSearched,
-                    };
+                    try {
+                        const startTime = Date.now();
 
-                    return {
-                        content: [{
-                            type: 'text' as const,
-                            text: JSON.stringify(response, null, 2),
-                        }],
-                    };
+                        const result = await new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve, reject) => {
+                            const child = spawn(input.command, input.args || [], {
+                                cwd,
+                                timeout,
+                            });
 
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                    return {
-                        content: [{
-                            type: 'text',
-                            text: `Error searching files: ${errorMessage}`,
-                        }],
-                        isError: true,
-                    };
-                }
-            }
+                            let stdout = '';
+                            let stderr = '';
 
-            case 'executeCommand': {
-                if (!validateExecuteCommandInput(args)) {
-                    return {
-                        content: [{
-                            type: 'text',
-                            text: 'Error: Invalid input. Expected { command: string }.',
-                        }],
-                        isError: true,
-                    };
-                }
+                            child.stdout?.on('data', (data) => {
+                                stdout += data.toString();
+                            });
 
-                const input: ExecuteCommandInput = args;
-                const timeout = input.timeout || 30000;
-                const cwd = input.cwd || process.cwd();
+                            child.stderr?.on('data', (data) => {
+                                stderr += data.toString();
+                            });
 
-                try {
-                    const startTime = Date.now();
+                            child.on('close', (code) => {
+                                resolve({
+                                    stdout,
+                                    stderr,
+                                    exitCode: code || 0,
+                                });
+                            });
 
-                    const result = await new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve, reject) => {
-                        const child = spawn(input.command, input.args || [], {
-                            cwd,
-                            timeout,
-                        });
-
-                        let stdout = '';
-                        let stderr = '';
-
-                        child.stdout?.on('data', (data) => {
-                            stdout += data.toString();
-                        });
-
-                        child.stderr?.on('data', (data) => {
-                            stderr += data.toString();
-                        });
-
-                        child.on('close', (code) => {
-                            resolve({
-                                stdout,
-                                stderr,
-                                exitCode: code || 0,
+                            child.on('error', (error) => {
+                                reject(error);
                             });
                         });
 
-                        child.on('error', (error) => {
-                            reject(error);
+                        const duration = Date.now() - startTime;
+
+                        const response = {
+                            ...result,
+                            duration,
+                        };
+
+                        return {
+                            content: [{
+                                type: 'text' as const,
+                                text: JSON.stringify(response, null, 2),
+                            }],
+                        };
+
+                    } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                        return {
+                            content: [{
+                                type: 'text',
+                                text: `Error executing command: ${errorMessage}`,
+                            }],
+                            isError: true,
+                        };
+                    }
+                }
+
+                case 'webFetch': {
+                    const parsed = WebFetchSchema.safeParse(args);
+                    if (!parsed.success) {
+                        return {
+                            content: [{
+                                type: 'text',
+                                text: 'Error: Invalid input. Expected { url: string }.',
+                            }],
+                            isError: true,
+                        };
+                    }
+
+                    const input = parsed.data;
+                    const timeout = input.timeout || 30000;
+                    const format = input.format || 'text';
+
+                    try {
+                        // Validate URL
+                        const url = new URL(input.url);
+                        if (!['http:', 'https:'].includes(url.protocol)) {
+                            return {
+                                content: [{
+                                    type: 'text',
+                                    text: 'Error: Only HTTP and HTTPS URLs are supported.',
+                                }],
+                                isError: true,
+                            };
+                        }
+
+                        // Fetch content with SSRF protection.
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+                        const response = await safeFetch(input.url, {
+                            signal: controller.signal,
                         });
-                    });
 
-                    const duration = Date.now() - startTime;
+                        clearTimeout(timeoutId);
 
-                    const response = {
-                        ...result,
-                        duration,
-                    };
+                        if (!response.ok) {
+                            return {
+                                content: [{
+                                    type: 'text',
+                                    text: `Error: HTTP ${response.status} ${response.statusText}`,
+                                }],
+                                isError: true,
+                            };
+                        }
 
-                    return {
-                        content: [{
-                            type: 'text' as const,
-                            text: JSON.stringify(response, null, 2),
-                        }],
-                    };
+                        const html = await response.text();
+                        let content = html;
 
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                    return {
-                        content: [{
-                            type: 'text',
-                            text: `Error executing command: ${errorMessage}`,
-                        }],
-                        isError: true,
-                    };
-                }
-            }
+                        // Parse HTML if selector provided
+                        if (input.selector) {
+                            const $ = cheerio.load(html);
+                            const selected = $(input.selector);
 
-            case 'webFetch': {
-                if (!validateWebFetchInput(args)) {
-                    return {
-                        content: [{
-                            type: 'text',
-                            text: 'Error: Invalid input. Expected { url: string }.',
-                        }],
-                        isError: true,
-                    };
-                }
+                            if (format === 'text') {
+                                content = selected.text();
+                            } else if (format === 'html') {
+                                content = selected.html() || '';
+                            }
+                        } else if (format === 'text') {
+                            const $ = cheerio.load(html);
+                            content = $('body').text();
+                        }
 
-                const input: WebFetchInput = args;
-                const timeout = input.timeout || 30000;
-                const format = input.format || 'text';
+                        const result = {
+                            content,
+                            metadata: {
+                                url: input.url,
+                                statusCode: response.status,
+                                contentType: response.headers.get('content-type'),
+                                size: html.length,
+                                fetchedAt: new Date().toISOString(),
+                            }
+                        };
 
-                try {
-                    // Validate URL
-                    const url = new URL(input.url);
-                    if (!['http:', 'https:'].includes(url.protocol)) {
+                        return {
+                            content: [{
+                                type: 'text' as const,
+                                text: JSON.stringify(result, null, 2),
+                            }],
+                        };
+
+                    } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
                         return {
                             content: [{
                                 type: 'text',
-                                text: 'Error: Only HTTP and HTTPS URLs are supported.',
+                                text: `Error fetching URL: ${errorMessage}`,
+                            }],
+                            isError: true,
+                        };
+                    }
+                }
+
+                case 'scrapeLinkedInJob': {
+                    const parsed = ScrapeLinkedInJobSchema.safeParse(args);
+                    if (!parsed.success) {
+                        return {
+                            content: [{
+                                type: 'text',
+                                text: 'Error: Invalid input. Expected { url: string } with a LinkedIn job URL.',
                             }],
                             isError: true,
                         };
                     }
 
-                    // Fetch content with SSRF protection.
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), timeout);
+                    const input = parsed.data;
+                    const includeDescription = input.includeDescription ?? true;
 
-                    const response = await safeFetch(input.url, {
-                        signal: controller.signal,
-                    });
+                    let browser;
+                    try {
+                        // Launch browser
+                        browser = await chromium.launch({ headless: true });
+                        const page = await browser.newPage();
 
-                    clearTimeout(timeoutId);
+                        // Navigate to job posting
+                        await page.goto(input.url, { waitUntil: 'networkidle', timeout: 30000 });
 
-                    if (!response.ok) {
-                        return {
-                            content: [{
-                                type: 'text',
-                                text: `Error: HTTP ${response.status} ${response.statusText}`,
-                            }],
-                            isError: true,
-                        };
-                    }
+                        // Wait for job content to load
+                        await page.waitForSelector('.top-card-layout__title, .job-details-jobs-unified-top-card__job-title', { timeout: 10000 });
 
-                    const html = await response.text();
-                    let content = html;
-
-                    // Parse HTML if selector provided
-                    if (input.selector) {
-                        const $ = cheerio.load(html);
-                        const selected = $(input.selector);
-
-                        if (format === 'text') {
-                            content = selected.text();
-                        } else if (format === 'html') {
-                            content = selected.html() || '';
-                        }
-                    } else if (format === 'text') {
-                        const $ = cheerio.load(html);
-                        content = $('body').text();
-                    }
-
-                    const result = {
-                        content,
-                        metadata: {
-                            url: input.url,
-                            statusCode: response.status,
-                            contentType: response.headers.get('content-type'),
-                            size: html.length,
-                            fetchedAt: new Date().toISOString(),
-                        }
-                    };
-
-                    return {
-                        content: [{
-                            type: 'text' as const,
-                            text: JSON.stringify(result, null, 2),
-                        }],
-                    };
-
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                    return {
-                        content: [{
-                            type: 'text',
-                            text: `Error fetching URL: ${errorMessage}`,
-                        }],
-                        isError: true,
-                    };
-                }
-            }
-
-            case 'scrapeLinkedInJob': {
-                if (!validateScrapeLinkedInJobInput(args)) {
-                    return {
-                        content: [{
-                            type: 'text',
-                            text: 'Error: Invalid input. Expected { url: string } with a LinkedIn job URL.',
-                        }],
-                        isError: true,
-                    };
-                }
-
-                const input: ScrapeLinkedInJobInput = args;
-                const includeDescription = input.includeDescription ?? true;
-
-                let browser;
-                try {
-                    // Launch browser
-                    browser = await chromium.launch({ headless: true });
-                    const page = await browser.newPage();
-
-                    // Navigate to job posting
-                    await page.goto(input.url, { waitUntil: 'networkidle', timeout: 30000 });
-
-                    // Wait for job content to load
-                    await page.waitForSelector('.top-card-layout__title, .job-details-jobs-unified-top-card__job-title', { timeout: 10000 });
-
-                    // Extract job details
-                    const jobData = await page.evaluate((includeDesc: boolean) => {
-                        // @ts-ignore - Running in browser context
-                        const getText = (selector: string): string => {
+                        // Extract job details
+                        const jobData = await page.evaluate((includeDesc: boolean) => {
                             // @ts-ignore - Running in browser context
-                            const el = document.querySelector(selector);
-                            return el?.textContent?.trim() || '';
+                            const getText = (selector: string): string => {
+                                // @ts-ignore - Running in browser context
+                                const el = document.querySelector(selector);
+                                return el?.textContent?.trim() || '';
+                            };
+
+                            return {
+                                title: getText('.top-card-layout__title, .job-details-jobs-unified-top-card__job-title'),
+                                company: getText('.top-card-layout__first-subline, .job-details-jobs-unified-top-card__company-name'),
+                                location: getText('.top-card-layout__second-subline, .job-details-jobs-unified-top-card__bullet'),
+                                description: includeDesc ? getText('.show-more-less-html__markup, .jobs-description__content') : '',
+                                postedDate: getText('.posted-time-ago__text, .job-details-jobs-unified-top-card__posted-date'),
+                            };
+                        }, includeDescription);
+
+                        // Take screenshot if requested
+                        if (input.screenshot) {
+                            const screenshotPath = path.join(process.cwd(), 'mcp-files', 'screenshots', `linkedin-job-${Date.now()}.png`);
+                            await fs.mkdir(path.dirname(screenshotPath), { recursive: true });
+                            await page.screenshot({ path: screenshotPath, fullPage: true });
+                            (jobData as any).screenshot = screenshotPath;
+                        }
+
+                        await browser.close();
+
+                        const response = {
+                            ...jobData,
+                            url: input.url,
+                            scrapedAt: new Date().toISOString(),
                         };
 
                         return {
-                            title: getText('.top-card-layout__title, .job-details-jobs-unified-top-card__job-title'),
-                            company: getText('.top-card-layout__first-subline, .job-details-jobs-unified-top-card__company-name'),
-                            location: getText('.top-card-layout__second-subline, .job-details-jobs-unified-top-card__bullet'),
-                            description: includeDesc ? getText('.show-more-less-html__markup, .jobs-description__content') : '',
-                            postedDate: getText('.posted-time-ago__text, .job-details-jobs-unified-top-card__posted-date'),
+                            content: [{
+                                type: 'text' as const,
+                                text: JSON.stringify(response, null, 2),
+                            }],
                         };
-                    }, includeDescription);
 
-                    // Take screenshot if requested
-                    if (input.screenshot) {
-                        const screenshotPath = path.join(process.cwd(), 'mcp-files', 'screenshots', `linkedin-job-${Date.now()}.png`);
-                        await fs.mkdir(path.dirname(screenshotPath), { recursive: true });
-                        await page.screenshot({ path: screenshotPath, fullPage: true });
-                        (jobData as any).screenshot = screenshotPath;
+                    } catch (error) {
+                        if (browser) await browser.close();
+
+                        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                        return {
+                            content: [{
+                                type: 'text',
+                                text: `Error scraping LinkedIn job: ${errorMessage}\n\nNote: LinkedIn may require authentication or may have blocked automated access.`,
+                            }],
+                            isError: true,
+                        };
                     }
-
-                    await browser.close();
-
-                    const response = {
-                        ...jobData,
-                        url: input.url,
-                        scrapedAt: new Date().toISOString(),
-                    };
-
-                    return {
-                        content: [{
-                            type: 'text' as const,
-                            text: JSON.stringify(response, null, 2),
-                        }],
-                    };
-
-                } catch (error) {
-                    if (browser) await browser.close();
-
-                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                    return {
-                        content: [{
-                            type: 'text',
-                            text: `Error scraping LinkedIn job: ${errorMessage}\n\nNote: LinkedIn may require authentication or may have blocked automated access.`,
-                        }],
-                        isError: true,
-                    };
                 }
-            }
 
-            default:
-                throw new Error(`Unknown tool: ${request.params.name}`);
+                default:
+                    throw new Error(`Unknown tool: ${request.params.name}`);
+                }
+        })();
+
+        // Validate the handler result against the Zod output schema
+        const checked = ToolResultSchema.safeParse(result);
+        if (!checked.success) {
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: 'Error: Internal error producing the tool result.',
+                    },
+                ],
+                isError: true,
+            };
         }
+        return checked.data;
     });
 }
